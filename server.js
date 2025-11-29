@@ -111,7 +111,7 @@ const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const path = require("path");
 const cron = require("node-cron");
-
+console.log("MONGO_URI =>", process.env.MONGO_URI);
 // Middlewares
 const { globalLimiter } = require("./middlewares/rateLimiter");
 const { notFound, errorHandler } = require("./middlewares/errorHandler");
