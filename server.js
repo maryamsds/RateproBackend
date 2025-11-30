@@ -138,14 +138,19 @@ const app = express();
 // ----------------------
 // Core Middleware
 // ----------------------
-app.set("trust proxy", 1);
+// app.set("trust proxy", 1);
+app.set("trust proxy", true);
+
 
 const allowedOrigins = [
-  process.env.PUBLIC_URL_LOCAL || "http://localhost:5173",
-  process.env.ADMIN_URL_LOCAL || "http://localhost:5174",
-  process.env.PUBLIC_URL_PROD || "https://rate-pro-public.vercel.app",
-  process.env.ADMIN_URL_PROD || "https://rate-pro-admin-six.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:5174",
   "http://192.168.0.4:5173",
+
+  // frontend production
+  "https://rate-pro-public.vercel.app",
+  "https://rate-pro-admin-six.vercel.app",
+  "https://rateprobackend-production-c52f.up.railway.app",
 ];
 
 app.use(
