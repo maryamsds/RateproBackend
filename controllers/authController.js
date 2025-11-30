@@ -619,8 +619,6 @@ exports.loginUser = async (req, res, next) => {
             path: "/"
         };
 
-        if (isProd) cookieConfig.domain = ".vercel.app";
-
         res.cookie("accessToken", accessToken, {
             ...cookieConfig,
             maxAge: 24 * 60 * 60 * 1000,

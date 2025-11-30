@@ -87,7 +87,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // app.use("/api/contacts", require("./routes/contactManagementRoutes.js"));
 // app.use("/api", require("./routes/logicEngineRoutes"));
 
- app.use("/api/auth", require("./routes/authRoutes"));
+app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/users", require("./routes/userRoutes"));
 
 app.use("/api/contact-categories", require("./routes/contactCategoryRoutes"));
