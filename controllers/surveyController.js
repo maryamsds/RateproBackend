@@ -16,6 +16,9 @@ const { analyzeFeedbackLogic } = require("./feedbackController")
 const { sendSurveyWhatsApp } = require('./distributionController');
 const Logger = require("../utils/auditLog");
 const Joi = require("joi");
+const generateSurveyToken = require("../utils/generateSurveyToken");
+const resolveSurveyRecipients = require("../utils/resolveSurveyRecipients");
+const SurveyInvite = require("../models/SurveyInvite");
 
 const createSchema = Joi.object({
     title: Joi.string().required(),
@@ -120,44 +123,210 @@ exports.createSurvey = async (req, res) => {
     }
 };
 
+// exports.publishSurvey = async (req, res, next) => {
+//     try {
+//         const { surveyId } = req.params;
+//         const survey = await Survey.findOne({ _id: surveyId, tenant: req.tenantId, deleted: false });
+
+//         if (!survey) return res.status(404).json({ message: "Survey nahi mila" });
+//         if (survey.status !== "draft") return res.status(400).json({ message: "Sirf draft publish ho sakta hai" });
+//         if (!survey.targetAudience || !survey.schedule) {
+//             return res.status(400).json({ message: "Pehle audience aur schedule set karo" });
+//         }
+
+//         const now = new Date();
+//         if (new Date(survey.schedule.startDate) <= now && survey.schedule.autoPublish) {
+//             survey.status = "active";
+//             survey.schedule.publishedAt = now;
+//             survey.publishLog.push({
+//                 publishedBy: req.user._id,
+//                 method: "manual",
+//                 recipientsCount: (survey.targetAudience.phones?.length || 0) + (survey.targetAudience.emails?.length || 0)
+//             });
+
+//             const recipients = [...(survey.targetAudience.phones || []), ...(survey.targetAudience.emails || [])];
+//             if (recipients.length > 0) {
+//                 const mockReq = { body: { surveyId: survey._id, recipients }, tenantId: req.tenantId };
+//                 await require('./distributionController').sendSurveyWhatsApp(mockReq, res, next);
+//             }
+
+//             await survey.save();
+//             res.json({ message: "Survey abhi bheja gaya!", survey });
+//         } else {
+//             survey.status = "scheduled";
+//             await survey.save();
+//             res.json({ message: "Survey schedule ho gaya – time pe bhejega", survey });
+//         }
+//     } catch (err) {
+//         next(err);
+//     }
+// };
+// exports.publishSurvey = async (req, res, next) => {
+//     try {
+//         const { surveyId } = req.params;
+
+//         const survey = await Survey.findOne({
+//             _id: surveyId,
+//             tenant: req.user.tenant,
+//             deleted: false
+//         });
+
+//         if (!survey) {
+//             return res.status(404).json({ message: "Survey not found" });
+//         }
+
+//         // 🔒 STATUS GUARD
+//         if (survey.status !== "draft") {
+//             return res.status(400).json({
+//                 message: "Only draft surveys can be published"
+//             });
+//         }
+
+//         // 🔒 AUDIENCE CHECK
+//         if (!survey.targetAudience || !survey.targetAudience.audienceType) {
+//             return res.status(400).json({
+//                 message: "Target audience is required before publishing"
+//             });
+//         }
+
+//         // 🔒 SCHEDULE CHECK
+//         if (!survey.schedule || !survey.schedule.startDate) {
+//             return res.status(400).json({
+//                 message: "Schedule is required before publishing"
+//             });
+//         }
+
+//         const now = new Date();
+
+//         // ✅ Decide ACTIVE or SCHEDULED
+//         if (survey.schedule.startDate <= now) {
+//             survey.status = "active";
+//             survey.schedule.publishedAt = now;
+//         } else {
+//             survey.status = "scheduled";
+//         }
+
+//         // ✅ Publish Log
+//         survey.publishLog.push({
+//             publishedBy: req.user._id,
+//             method: "manual",
+//             recipientsCount: 0 // step-4 me calculate hoga
+//         });
+
+//         await survey.save();
+
+//         res.json({
+//             message:
+//                 survey.status === "active"
+//                     ? "Survey published successfully"
+//                     : "Survey scheduled successfully",
+//             status: survey.status,
+//             publishedAt: survey.schedule.publishedAt || null
+//         });
+
+//     } catch (err) {
+//         next(err);
+//     }
+// };
 exports.publishSurvey = async (req, res, next) => {
     try {
-        const { surveyId } = req.params;
-        const survey = await Survey.findOne({ _id: surveyId, tenant: req.tenantId, deleted: false });
+        const survey = await Survey.findOne({
+            _id: req.params.surveyId,
+            tenant: req.user.tenant,
+            status: "draft",
+            deleted: false
+        });
 
-        if (!survey) return res.status(404).json({ message: "Survey nahi mila" });
-        if (survey.status !== "draft") return res.status(400).json({ message: "Sirf draft publish ho sakta hai" });
-        if (!survey.targetAudience || !survey.schedule) {
-            return res.status(400).json({ message: "Pehle audience aur schedule set karo" });
+        if (!survey) {
+            return res.status(404).json({ message: "Survey not found or already published" });
         }
 
-        const now = new Date();
-        if (new Date(survey.schedule.startDate) <= now && survey.schedule.autoPublish) {
-            survey.status = "active";
-            survey.schedule.publishedAt = now;
-            survey.publishLog.push({
-                publishedBy: req.user._id,
-                method: "manual",
-                recipientsCount: (survey.targetAudience.phones?.length || 0) + (survey.targetAudience.emails?.length || 0)
+        // ✅ Resolve recipients
+        const recipients = await resolveSurveyRecipients(survey);
+
+        if (!recipients.length) {
+            return res.status(400).json({ message: "No recipients found for this survey" });
+        }
+
+        let created = 0;
+
+        for (const r of recipients) {
+            // ✅ Prevent duplicate invite
+            const exists = await SurveyInvite.findOne({
+                survey: survey._id,
+                tenant: survey.tenant,
+                $or: [
+                    { "contact.email": r.email },
+                    { "contact.phone": r.phone }
+                ]
             });
 
-            const recipients = [...(survey.targetAudience.phones || []), ...(survey.targetAudience.emails || [])];
-            if (recipients.length > 0) {
-                const mockReq = { body: { surveyId: survey._id, recipients }, tenantId: req.tenantId };
-                await require('./distributionController').sendSurveyWhatsApp(mockReq, res, next);
-            }
+            if (exists) continue;
 
-            await survey.save();
-            res.json({ message: "Survey abhi bheja gaya!", survey });
-        } else {
-            survey.status = "scheduled";
-            await survey.save();
-            res.json({ message: "Survey schedule ho gaya – time pe bhejega", survey });
+            await SurveyInvite.create({
+                survey: survey._id,
+                tenant: survey.tenant,
+                contact: r,
+                token: generateSurveyToken()
+            });
+
+            created++;
         }
+
+        survey.status = "active";
+        survey.schedule.publishedAt = new Date();
+        survey.publishLog.push({
+            publishedBy: req.user._id,
+            method: "manual",
+            recipientsCount: created
+        });
+
+        await survey.save();
+
+        res.json({
+            message: "Survey published successfully",
+            invitesCreated: created
+        });
+
     } catch (err) {
         next(err);
     }
 };
+
+exports.getSurveyByToken = async (req, res, next) => {
+    try {
+        const { token } = req.params;
+
+        const invite = await SurveyInvite.findOne({ inviteToken: token })
+            .populate("survey");
+
+        if (!invite) {
+            return res.status(404).json({ message: "Invalid or expired link" });
+        }
+
+        if (invite.submittedAt) {
+            return res.status(410).json({
+                message: "Survey already submitted"
+            });
+        }
+
+        // ✅ mark opened
+        if (!invite.openedAt) {
+            invite.openedAt = new Date();
+            invite.status = "opened";
+            await invite.save();
+        }
+
+        res.json({
+            survey: invite.survey,
+            inviteId: invite._id
+        });
+
+    } catch (err) {
+        next(err);
+    }
+};
+
 
 // ===== AUTO ACTION GENERATION FROM SURVEY RESPONSES (Flow.md Section 7) =====
 const generateActionsFromResponse = async (response, survey, tenantId) => {
@@ -579,135 +748,168 @@ exports.getSurveyById = async (req, res, next) => {
 };
 
 // ===== TAKE SURVEY / SUBMIT RESPONSE =====
+// exports.submitSurveyResponse = async (req, res, next) => {
+//     try {
+//         await Logger.info("submitSurveyResponse: Request received", {
+//             surveyId: req.body?.surveyId,
+//             ip: req.ip,
+//             userId: req.user?._id || "Anonymous",
+//             deviceId: req.body?.deviceId,
+//         });
+
+//         const { surveyId, answers, responses, review, score, rating, deviceId } = req.body;
+//         const finalAnswers = answers || responses;
+
+//         // 🟢 STEP 1: Survey check
+//         const survey = await Survey.findById(surveyId);
+//         if (!survey) {
+//             await Logger.warn("submitSurveyResponse: Survey not found", { surveyId });
+//             return res.status(404).json({ message: "Survey not found" });
+//         }
+//         if (survey.deleted) {
+//             await Logger.warn("submitSurveyResponse: Survey marked as deleted", { surveyId });
+//             return res.status(404).json({ message: "Survey not found (deleted)" });
+//         }
+
+//         await Logger.info("submitSurveyResponse: Survey found", {
+//             surveyId,
+//             title: survey.title,
+//             tenant: survey.tenant,
+//         });
+
+//         // 🟢 STEP 2: Duplicate check
+//         const exists = await SurveyResponse.findOne({
+//             survey: surveyId,
+//             $or: [{ user: req.user?._id }, { ip: req.ip }],
+//         });
+
+//         if (exists) {
+//             await Logger.warn("submitSurveyResponse: Duplicate submission detected", {
+//                 surveyId,
+//                 ip: req.ip,
+//                 userId: req.user?._id,
+//             });
+//             return res.status(400).json({ message: "You already submitted this survey" });
+//         }
+
+//         // 🟢 STEP 3: Create response
+//         const response = new SurveyResponse({
+//             survey: surveyId,
+//             user: survey.settings?.isAnonymous ? null : req.user?._id,
+//             answers: finalAnswers,
+//             review,
+//             score,
+//             rating,
+//             isAnonymous: survey.settings?.isAnonymous || false,
+//             ip: req.ip,
+//             deviceId,
+//             tenant: survey.tenant,
+//         });
+//         await response.save();
+
+//         await Logger.info("submitSurveyResponse: Response saved", {
+//             responseId: response._id,
+//             surveyId,
+//             score,
+//             rating,
+//         });
+
+//         // 🟢 STEP 4: Update stats
+//         const allResponses = await SurveyResponse.find({ survey: surveyId });
+//         const total = allResponses.length;
+//         const avgScore = allResponses.reduce((sum, r) => sum + (r.score || 0), 0) / total;
+//         const avgRating = allResponses.reduce((sum, r) => sum + (r.rating || 0), 0) / total;
+
+//         survey.totalResponses = total;
+//         survey.averageScore = Math.round(avgScore || 0);
+//         survey.averageRating = Math.round(avgRating || 0);
+//         await survey.save();
+
+//         await Logger.info("submitSurveyResponse: Stats updated", {
+//             surveyId,
+//             totalResponses: total,
+//             avgScore,
+//             avgRating,
+//         });
+
+//         const tenantId = req.tenantId || req.user?.tenant || survey.tenant;
+//         if (!tenantId) {
+//             await Logger.error("submitSurveyResponse: No tenant ID found", {
+//                 userId: req.user?._id,
+//                 surveyId,
+//             });
+//             return res.status(400).json({ message: "Tenant not configured" });
+//         }
+
+//         // 🟢 STEP 5: Analyze feedback
+//         await Logger.info("submitSurveyResponse: Analyzing feedback", { surveyId, tenantId });
+//         await analyzeFeedbackLogic({ responseIds: [response._id] }, tenantId);
+//         await Logger.info("submitSurveyResponse: Feedback analysis complete", { surveyId });
+
+//         // 🟢 STEP 6: Next question logic
+//         let nextQuestionId = null;
+//         if (finalAnswers?.length > 0) {
+//             const lastAnswer = finalAnswers[finalAnswers.length - 1];
+//             const currentQ = survey.questions.find((q) => q._id.toString() === lastAnswer.questionId);
+//             if (currentQ) nextQuestionId = getNextQuestion(lastAnswer.answer, currentQ);
+//         }
+
+//         await Logger.info("submitSurveyResponse: Next question determined", {
+//             nextQuestionId,
+//         });
+
+//         // 🟢 STEP 7: Trigger actions
+//         await Logger.info("submitSurveyResponse: Generating actions from response", { responseId: response._id });
+//         await generateActionsFromResponse(response, survey, tenantId);
+//         await Logger.info("submitSurveyResponse: Actions generated successfully", { responseId: response._id });
+
+//         res.status(201).json({ message: "Survey submitted", response, nextQuestionId });
+
+//         await Logger.info("submitSurveyResponse: Completed successfully", {
+//             surveyId,
+//             responseId: response._id,
+//             tenantId,
+//         });
+//     } catch (err) {
+//         await Logger.error("submitSurveyResponse: Error occurred", {
+//             error: err.message,
+//             stack: err.stack,
+//             surveyId: req.body?.surveyId,
+//             userId: req.user?._id || "Anonymous",
+//         });
+//         next(err);
+//     }
+// };
+
 exports.submitSurveyResponse = async (req, res, next) => {
     try {
-        await Logger.info("submitSurveyResponse: Request received", {
-            surveyId: req.body?.surveyId,
-            ip: req.ip,
-            userId: req.user?._id || "Anonymous",
-            deviceId: req.body?.deviceId,
-        });
+        const { token } = req.params;
+        const answers = req.body.answers;
 
-        const { surveyId, answers, responses, review, score, rating, deviceId } = req.body;
-        const finalAnswers = answers || responses;
+        const invite = await SurveyInvite.findOne({ inviteToken: token });
 
-        // 🟢 STEP 1: Survey check
-        const survey = await Survey.findById(surveyId);
-        if (!survey) {
-            await Logger.warn("submitSurveyResponse: Survey not found", { surveyId });
-            return res.status(404).json({ message: "Survey not found" });
-        }
-        if (survey.deleted) {
-            await Logger.warn("submitSurveyResponse: Survey marked as deleted", { surveyId });
-            return res.status(404).json({ message: "Survey not found (deleted)" });
+        if (!invite) {
+            return res.status(404).json({ message: "Invalid link" });
         }
 
-        await Logger.info("submitSurveyResponse: Survey found", {
-            surveyId,
-            title: survey.title,
-            tenant: survey.tenant,
-        });
-
-        // 🟢 STEP 2: Duplicate check
-        const exists = await SurveyResponse.findOne({
-            survey: surveyId,
-            $or: [{ user: req.user?._id }, { ip: req.ip }],
-        });
-
-        if (exists) {
-            await Logger.warn("submitSurveyResponse: Duplicate submission detected", {
-                surveyId,
-                ip: req.ip,
-                userId: req.user?._id,
-            });
-            return res.status(400).json({ message: "You already submitted this survey" });
+        if (invite.submittedAt) {
+            return res.status(409).json({ message: "Response already submitted" });
         }
 
-        // 🟢 STEP 3: Create response
-        const response = new SurveyResponse({
-            survey: surveyId,
-            user: survey.settings?.isAnonymous ? null : req.user?._id,
-            answers: finalAnswers,
-            review,
-            score,
-            rating,
-            isAnonymous: survey.settings?.isAnonymous || false,
-            ip: req.ip,
-            deviceId,
-            tenant: survey.tenant,
-        });
-        await response.save();
-
-        await Logger.info("submitSurveyResponse: Response saved", {
-            responseId: response._id,
-            surveyId,
-            score,
-            rating,
+        await SurveyResponse.create({
+            survey: invite.survey,
+            tenant: invite.tenant,
+            invite: invite._id,
+            answers
         });
 
-        // 🟢 STEP 4: Update stats
-        const allResponses = await SurveyResponse.find({ survey: surveyId });
-        const total = allResponses.length;
-        const avgScore = allResponses.reduce((sum, r) => sum + (r.score || 0), 0) / total;
-        const avgRating = allResponses.reduce((sum, r) => sum + (r.rating || 0), 0) / total;
+        invite.submittedAt = new Date();
+        invite.status = "submitted";
+        await invite.save();
 
-        survey.totalResponses = total;
-        survey.averageScore = Math.round(avgScore || 0);
-        survey.averageRating = Math.round(avgRating || 0);
-        await survey.save();
+        res.json({ message: "Response submitted successfully" });
 
-        await Logger.info("submitSurveyResponse: Stats updated", {
-            surveyId,
-            totalResponses: total,
-            avgScore,
-            avgRating,
-        });
-
-        const tenantId = req.tenantId || req.user?.tenant || survey.tenant;
-        if (!tenantId) {
-            await Logger.error("submitSurveyResponse: No tenant ID found", {
-                userId: req.user?._id,
-                surveyId,
-            });
-            return res.status(400).json({ message: "Tenant not configured" });
-        }
-
-        // 🟢 STEP 5: Analyze feedback
-        await Logger.info("submitSurveyResponse: Analyzing feedback", { surveyId, tenantId });
-        await analyzeFeedbackLogic({ responseIds: [response._id] }, tenantId);
-        await Logger.info("submitSurveyResponse: Feedback analysis complete", { surveyId });
-
-        // 🟢 STEP 6: Next question logic
-        let nextQuestionId = null;
-        if (finalAnswers?.length > 0) {
-            const lastAnswer = finalAnswers[finalAnswers.length - 1];
-            const currentQ = survey.questions.find((q) => q._id.toString() === lastAnswer.questionId);
-            if (currentQ) nextQuestionId = getNextQuestion(lastAnswer.answer, currentQ);
-        }
-
-        await Logger.info("submitSurveyResponse: Next question determined", {
-            nextQuestionId,
-        });
-
-        // 🟢 STEP 7: Trigger actions
-        await Logger.info("submitSurveyResponse: Generating actions from response", { responseId: response._id });
-        await generateActionsFromResponse(response, survey, tenantId);
-        await Logger.info("submitSurveyResponse: Actions generated successfully", { responseId: response._id });
-
-        res.status(201).json({ message: "Survey submitted", response, nextQuestionId });
-
-        await Logger.info("submitSurveyResponse: Completed successfully", {
-            surveyId,
-            responseId: response._id,
-            tenantId,
-        });
     } catch (err) {
-        await Logger.error("submitSurveyResponse: Error occurred", {
-            error: err.message,
-            stack: err.stack,
-            surveyId: req.body?.surveyId,
-            userId: req.user?._id || "Anonymous",
-        });
         next(err);
     }
 };
@@ -1321,34 +1523,83 @@ exports.deleteQuestion = async (req, res) => {
 };
 
 // ===== TARGET AUDIENCE & SCHEDULING =====
+// exports.setTargetAudience = async (req, res, next) => {
+//     try {
+//         const { surveyId } = req.params;
+//         const { targetAudience } = req.body;
+
+//         await Logger.info("🎯 Setting target audience for survey", {
+//             surveyId,
+//             targetAudience,
+//             userId: req.user?._id,
+//             tenantId: req.user?.tenant
+//         });
+
+//         // Validate surveyId
+//         if (!mongoose.Types.ObjectId.isValid(surveyId)) {
+//             await Logger.warn("⚠️ Invalid surveyId provided", { surveyId });
+//             return res.status(400).json({ message: "Invalid survey ID" });
+//         }
+
+//         // Validate targetAudience
+//         const validAudiences = ["employee", "customer", "public", "vendor", "guest", "student", "patient", "all"];
+//         if (!Array.isArray(targetAudience) || !targetAudience.every(audience => validAudiences.includes(audience))) {
+//             await Logger.warn("⚠️ Invalid target audience provided", { targetAudience });
+//             return res.status(400).json({
+//                 message: "Invalid target audience. Valid options: " + validAudiences.join(", ")
+//             });
+//         }
+
+//         // Find and update survey
+//         const survey = await Survey.findOne({
+//             _id: surveyId,
+//             tenant: req.user.tenant,
+//             deleted: false
+//         });
+
+//         if (!survey) {
+//             await Logger.warn("⚠️ Survey not found or access denied", {
+//                 surveyId,
+//                 tenantId: req.user?.tenant
+//             });
+//             return res.status(404).json({ message: "Survey not found or access denied" });
+//         }
+
+//         // Update target audience
+//         survey.targetAudience = targetAudience;
+//         await survey.save();
+
+//         await Logger.info("✅ Target audience updated successfully", {
+//             surveyId,
+//             targetAudience,
+//             tenantId: req.user?.tenant
+//         });
+
+//         res.status(200).json({
+//             message: "Target audience updated successfully",
+//             survey: {
+//                 _id: survey._id,
+//                 title: survey.title,
+//                 targetAudience: survey.targetAudience,
+//                 status: survey.status
+//             }
+//         });
+
+//     } catch (err) {
+//         await Logger.error("💥 Error setting target audience", {
+//             error: err.message,
+//             stack: err.stack,
+//             surveyId: req.params?.surveyId,
+//             userId: req.user?._id
+//         });
+//         next(err);
+//     }
+// };
 exports.setTargetAudience = async (req, res, next) => {
     try {
         const { surveyId } = req.params;
-        const { targetAudience } = req.body;
+        const { audienceType, categories = [], users = [], contacts = [] } = req.body;
 
-        await Logger.info("🎯 Setting target audience for survey", {
-            surveyId,
-            targetAudience,
-            userId: req.user?._id,
-            tenantId: req.user?.tenant
-        });
-
-        // Validate surveyId
-        if (!mongoose.Types.ObjectId.isValid(surveyId)) {
-            await Logger.warn("⚠️ Invalid surveyId provided", { surveyId });
-            return res.status(400).json({ message: "Invalid survey ID" });
-        }
-
-        // Validate targetAudience
-        const validAudiences = ["employee", "customer", "public", "vendor", "guest", "student", "patient", "all"];
-        if (!Array.isArray(targetAudience) || !targetAudience.every(audience => validAudiences.includes(audience))) {
-            await Logger.warn("⚠️ Invalid target audience provided", { targetAudience });
-            return res.status(400).json({
-                message: "Invalid target audience. Valid options: " + validAudiences.join(", ")
-            });
-        }
-
-        // Find and update survey
         const survey = await Survey.findOne({
             _id: surveyId,
             tenant: req.user.tenant,
@@ -1356,84 +1607,176 @@ exports.setTargetAudience = async (req, res, next) => {
         });
 
         if (!survey) {
-            await Logger.warn("⚠️ Survey not found or access denied", {
-                surveyId,
-                tenantId: req.user?.tenant
-            });
-            return res.status(404).json({ message: "Survey not found or access denied" });
+            return res.status(404).json({ message: "Survey not found" });
         }
 
-        // Update target audience
+        // ✅ Anonymous guard
+        if (survey.settings.isAnonymous && users.length > 0) {
+            return res.status(400).json({
+                message: "Anonymous surveys cannot target internal users"
+            });
+        }
+
+        // ✅ Audience logic (ONLY ONE PATH EXECUTES)
+        let targetAudience = { audienceType };
+
+        switch (audienceType) {
+            case "all":
+                targetAudience = { audienceType: "all" };
+                break;
+
+            case "category":
+                targetAudience = {
+                    audienceType: "category",
+                    categories
+                };
+                break;
+
+            case "custom":
+                targetAudience = {
+                    audienceType: "custom",
+                    users,
+                    contacts
+                };
+                break;
+
+            default:
+                return res.status(400).json({ message: "Invalid audienceType" });
+        }
+
         survey.targetAudience = targetAudience;
         await survey.save();
 
-        await Logger.info("✅ Target audience updated successfully", {
-            surveyId,
-            targetAudience,
-            tenantId: req.user?.tenant
-        });
-
-        res.status(200).json({
-            message: "Target audience updated successfully",
-            survey: {
-                _id: survey._id,
-                title: survey.title,
-                targetAudience: survey.targetAudience,
-                status: survey.status
-            }
+        res.json({
+            message: "Target audience saved successfully",
+            targetAudience: survey.targetAudience
         });
 
     } catch (err) {
-        await Logger.error("💥 Error setting target audience", {
-            error: err.message,
-            stack: err.stack,
-            surveyId: req.params?.surveyId,
-            userId: req.user?._id
-        });
         next(err);
     }
 };
 
+
+// exports.scheduleSurvey = async (req, res, next) => {
+//     try {
+//         const { surveyId } = req.params;
+//         const { startDate, endDate, timezone, autoPublish, repeat } = req.body;
+
+//         await Logger.info("📅 Scheduling survey", {
+//             surveyId,
+//             startDate,
+//             endDate,
+//             autoPublish,
+//             userId: req.user?._id,
+//             tenantId: req.user?.tenant
+//         });
+
+//         // Validate surveyId
+//         if (!mongoose.Types.ObjectId.isValid(surveyId)) {
+//             await Logger.warn("⚠️ Invalid surveyId provided", { surveyId });
+//             return res.status(400).json({ message: "Invalid survey ID" });
+//         }
+
+//         // Validate dates
+//         const start = new Date(startDate);
+//         const end = endDate ? new Date(endDate) : null;
+
+//         if (isNaN(start.getTime())) {
+//             await Logger.warn("⚠️ Invalid start date provided", { startDate });
+//             return res.status(400).json({ message: "Invalid start date" });
+//         }
+
+//         if (end && isNaN(end.getTime())) {
+//             await Logger.warn("⚠️ Invalid end date provided", { endDate });
+//             return res.status(400).json({ message: "Invalid end date" });
+//         }
+
+//         if (end && start >= end) {
+//             await Logger.warn("⚠️ Start date must be before end date", { startDate, endDate });
+//             return res.status(400).json({ message: "Start date must be before end date" });
+//         }
+
+//         // Find survey
+//         const survey = await Survey.findOne({
+//             _id: surveyId,
+//             tenant: req.user.tenant,
+//             deleted: false
+//         });
+
+//         if (!survey) {
+//             await Logger.warn("⚠️ Survey not found or access denied", {
+//                 surveyId,
+//                 tenantId: req.user?.tenant
+//             });
+//             return res.status(404).json({ message: "Survey not found or access denied" });
+//         }
+
+//         // Update schedule
+//         survey.schedule = {
+//             startDate: start,
+//             endDate: end,
+//             timezone: timezone || "UTC",
+//             autoPublish: autoPublish || false,
+//             publishedAt: null,
+//             repeat: repeat || { enabled: false, frequency: "none" }
+//         };
+
+//         // Set status based on schedule and current time
+//         const now = new Date();
+//         if (start <= now && autoPublish) {
+//             // Should be published immediately
+//             survey.status = "active";
+//             survey.schedule.publishedAt = now;
+//             await Logger.info("📢 Survey published immediately", { surveyId });
+//         } else if (start > now && autoPublish) {
+//             // Schedule for future publishing
+//             survey.status = "scheduled";
+//             await Logger.info("⏰ Survey scheduled for future publishing", {
+//                 surveyId,
+//                 scheduledFor: start
+//             });
+//         }
+
+//         await survey.save();
+
+//         await Logger.info("✅ Survey scheduled successfully", {
+//             surveyId,
+//             status: survey.status,
+//             startDate: start,
+//             endDate: end,
+//             tenantId: req.user?.tenant
+//         });
+
+//         res.status(200).json({
+//             message: "Survey scheduled successfully",
+//             survey: {
+//                 _id: survey._id,
+//                 title: survey.title,
+//                 status: survey.status,
+//                 schedule: survey.schedule,
+//                 targetAudience: survey.targetAudience
+//             }
+//         });
+
+//     } catch (err) {
+//         await Logger.error("💥 Error scheduling survey", {
+//             error: err.message,
+//             stack: err.stack,
+//             surveyId: req.params?.surveyId,
+//             userId: req.user?._id
+//         });
+//         next(err);
+//     }
+// };
+
+
+// ===== AUTO-PUBLISH CRON JOB FUNCTION =====
 exports.scheduleSurvey = async (req, res, next) => {
     try {
         const { surveyId } = req.params;
         const { startDate, endDate, timezone, autoPublish, repeat } = req.body;
 
-        await Logger.info("📅 Scheduling survey", {
-            surveyId,
-            startDate,
-            endDate,
-            autoPublish,
-            userId: req.user?._id,
-            tenantId: req.user?.tenant
-        });
-
-        // Validate surveyId
-        if (!mongoose.Types.ObjectId.isValid(surveyId)) {
-            await Logger.warn("⚠️ Invalid surveyId provided", { surveyId });
-            return res.status(400).json({ message: "Invalid survey ID" });
-        }
-
-        // Validate dates
-        const start = new Date(startDate);
-        const end = endDate ? new Date(endDate) : null;
-
-        if (isNaN(start.getTime())) {
-            await Logger.warn("⚠️ Invalid start date provided", { startDate });
-            return res.status(400).json({ message: "Invalid start date" });
-        }
-
-        if (end && isNaN(end.getTime())) {
-            await Logger.warn("⚠️ Invalid end date provided", { endDate });
-            return res.status(400).json({ message: "Invalid end date" });
-        }
-
-        if (end && start >= end) {
-            await Logger.warn("⚠️ Start date must be before end date", { startDate, endDate });
-            return res.status(400).json({ message: "Start date must be before end date" });
-        }
-
-        // Find survey
         const survey = await Survey.findOne({
             _id: surveyId,
             tenant: req.user.tenant,
@@ -1441,72 +1784,67 @@ exports.scheduleSurvey = async (req, res, next) => {
         });
 
         if (!survey) {
-            await Logger.warn("⚠️ Survey not found or access denied", {
-                surveyId,
-                tenantId: req.user?.tenant
-            });
-            return res.status(404).json({ message: "Survey not found or access denied" });
+            return res.status(404).json({ message: "Survey not found" });
         }
 
-        // Update schedule
+        // 🔒 STATUS GUARD
+        if (survey.status === "active") {
+            return res.status(400).json({
+                message: "Active survey cannot be rescheduled"
+            });
+        }
+
+        if (!survey.targetAudience || !survey.targetAudience.audienceType) {
+            return res.status(400).json({
+                message: "Set target audience before scheduling"
+            });
+        }
+
+        const start = new Date(startDate);
+        const end = endDate ? new Date(endDate) : null;
+        const now = new Date();
+
+        if (isNaN(start.getTime())) {
+            return res.status(400).json({ message: "Invalid startDate" });
+        }
+
+        if (end && start >= end) {
+            return res.status(400).json({
+                message: "startDate must be before endDate"
+            });
+        }
+
+        // ✅ Schedule assign
         survey.schedule = {
             startDate: start,
             endDate: end,
-            timezone: timezone || "UTC",
-            autoPublish: autoPublish || false,
-            publishedAt: null,
-            repeat: repeat || { enabled: false, frequency: "none" }
+            timezone: timezone || "Asia/Karachi",
+            autoPublish: !!autoPublish,
+            repeat: repeat || { enabled: false, frequency: "none" },
+            publishedAt: null
         };
 
-        // Set status based on schedule and current time
-        const now = new Date();
-        if (start <= now && autoPublish) {
-            // Should be published immediately
+        // ✅ Status decision
+        if (autoPublish && start <= now) {
             survey.status = "active";
             survey.schedule.publishedAt = now;
-            await Logger.info("📢 Survey published immediately", { surveyId });
-        } else if (start > now && autoPublish) {
-            // Schedule for future publishing
+        } else {
             survey.status = "scheduled";
-            await Logger.info("⏰ Survey scheduled for future publishing", {
-                surveyId,
-                scheduledFor: start
-            });
         }
 
         await survey.save();
 
-        await Logger.info("✅ Survey scheduled successfully", {
-            surveyId,
-            status: survey.status,
-            startDate: start,
-            endDate: end,
-            tenantId: req.user?.tenant
-        });
-
-        res.status(200).json({
+        res.json({
             message: "Survey scheduled successfully",
-            survey: {
-                _id: survey._id,
-                title: survey.title,
-                status: survey.status,
-                schedule: survey.schedule,
-                targetAudience: survey.targetAudience
-            }
+            status: survey.status,
+            schedule: survey.schedule
         });
 
     } catch (err) {
-        await Logger.error("💥 Error scheduling survey", {
-            error: err.message,
-            stack: err.stack,
-            surveyId: req.params?.surveyId,
-            userId: req.user?._id
-        });
         next(err);
     }
 };
 
-// ===== AUTO-PUBLISH CRON JOB FUNCTION =====
 exports.autoPublishScheduledSurveys = async () => {
     try {
         const now = new Date();

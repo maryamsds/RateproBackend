@@ -20,6 +20,7 @@ const {
   exportSurveyReport,
   getSurveyResponses,
   getSurveyAnalytics,
+  getSurveyByToken,
 } = require("../controllers/surveyController");
 const {
   analyzeFeedback,
@@ -76,4 +77,6 @@ router.post("/feedback/follow-up", tenantCheck, allowRoles("admin", "companyAdmi
 router.get("/dashboards/executive", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("dashboard:view"), getExecutiveDashboard);
 router.get("/dashboards/operational", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("dashboard:view"), getOperationalDashboard);
 
+router.get("/respond/:token", getSurveyByToken);
+router.post("/respond/:token", submitSurveyResponse);
 module.exports = router;

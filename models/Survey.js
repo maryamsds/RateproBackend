@@ -65,11 +65,34 @@ const surveySchema = new mongoose.Schema(
     deleted: { type: Boolean, default: false },
 
     // 🔥 YE 3 NAYE FIELDS ADD KAR RAHA HUN 🔥
+    // targetAudience: {
+    //   type: { type: String, enum: ["all", "specific"], default: "specific" },
+    //   emails: [{ type: String }],        // e.g., ["ali@gmail.com"]
+    //   phones: [{ type: String }],        // e.g., ["+923001234567"]
+    //   userIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // internal employees
+    // },
     targetAudience: {
-      type: { type: String, enum: ["all", "specific"], default: "specific" },
-      emails: [{ type: String }],        // e.g., ["ali@gmail.com"]
-      phones: [{ type: String }],        // e.g., ["+923001234567"]
-      userIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // internal employees
+      audienceType: {
+        type: String,
+        enum: ["all", "category", "custom"],
+        default: "custom"
+      },
+
+      categories: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "UserCategory" // employee, customer, vendor etc
+      }],
+
+      users: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User" // internal users
+      }],
+
+      contacts: [{
+        name: String,
+        email: String,
+        phone: String
+      }]
     },
 
     schedule: {
@@ -114,6 +137,7 @@ const surveySchema = new mongoose.Schema(
 surveySchema.index({ tenant: 1 });
 surveySchema.index({ status: 1 });
 surveySchema.index({ "schedule.startDate": 1 });
-surveySchema.index({ "targetAudience.phones": 1 });
+surveySchema.index({ "targetAudience.contacts.phone": 1 });
+surveySchema.index({ "targetAudience.contacts.email": 1 });
 
 module.exports = mongoose.model("Survey", surveySchema);
