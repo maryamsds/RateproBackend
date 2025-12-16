@@ -140,18 +140,18 @@ const updateSchema = Joi.object({
 exports.createCategory = async (req, res) => {
     try {
         if (!req.user || !req.tenantId) {
-            await Logger.warn('createCategory: Invalid request context', { userId: req.user?._id, tenantId: req.tenantId });
+            await Logger.warning('createCategory: Invalid request context', { userId: req.user?._id, tenantId: req.tenantId });
             return res.status(400).json({ message: "Invalid request context" });
         }
 
         const { error, value } = createSchema.validate(req.body);
         if (error) {
-            await Logger.warn('createCategory: Validation failed', { errors: error.details, userId: req.user._id });
+            await Logger.warning('createCategory: Validation failed', { errors: error.details, userId: req.user._id });
             return res.status(400).json({ message: error.details[0].message });
         }
 
         if (!['admin', 'companyAdmin'].includes(req.user.role)) {
-            await Logger.warn('createCategory: Access denied', { userId: req.user._id, role: req.user.role });
+            await Logger.warning('createCategory: Access denied', { userId: req.user._id, role: req.user.role });
             return res.status(403).json({ message: 'Access denied' });
         }
 
@@ -208,19 +208,19 @@ exports.updateCategory = async (req, res) => {
     try {
         const { error, value } = updateSchema.validate(req.body);
         if (error) {
-            await Logger.warn('updateCategory: Validation failed', { errors: error.details, tenantId: req.tenantId });
+            await Logger.warning('updateCategory: Validation failed', { errors: error.details, tenantId: req.tenantId });
             return res.status(400).json({ message: error.details[0].message });
         }
 
         if (!["admin", "companyAdmin"].includes(req.user.role)) {
-            await Logger.warn('updateCategory: Access denied', { userId: req.user._id, role: req.user.role });
+            await Logger.warning('updateCategory: Access denied', { userId: req.user._id, role: req.user.role });
             return res.status(403).json({ message: "Access denied" });
         }
 
         // 🔒 Prevent editing default categories
         const target = await ContactCategory.findById(req.params.id);
         if (!target) {
-            await Logger.warn('updateCategory: Category not found', { categoryId: req.params.id });
+            await Logger.warning('updateCategory: Category not found', { categoryId: req.params.id });
             return res.status(404).json({ message: "Category not found" });
         }
         if (target.isDefault) {
@@ -248,13 +248,13 @@ exports.updateCategory = async (req, res) => {
 exports.deleteCategory = async (req, res) => {
     try {
         if (!["admin", "companyAdmin"].includes(req.user.role)) {
-            await Logger.warn('deleteCategory: Access denied', { userId: req.user._id, role: req.user.role });
+            await Logger.warning('deleteCategory: Access denied', { userId: req.user._id, role: req.user.role });
             return res.status(403).json({ message: "Access denied" });
         }
 
         const target = await ContactCategory.findById(req.params.id);
         if (!target) {
-            await Logger.warn('deleteCategory: Category not found', { categoryId: req.params.id });
+            await Logger.warning('deleteCategory: Category not found', { categoryId: req.params.id });
             return res.status(404).json({ message: "Category not found" });
         }
         if (target.isDefault) {

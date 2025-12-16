@@ -74,13 +74,13 @@ exports.upsertWhatsAppSetting = async (req, res, next) => {
   try {
     const { error, value } = schema.validate(req.body);
     if (error) {
-      await Logger.warn("WhatsApp setting validation failed", { error: error.details[0].message, body: req.body, userId: req.user?._id });
+      await Logger.warning("WhatsApp setting validation failed", { error: error.details[0].message, body: req.body, userId: req.user?._id });
       return res.status(400).json({ message: error.details[0].message });
     }
 
     const tenantId = req.tenantId;
     if (!tenantId) {
-      await Logger.warn("WhatsApp setting attempt without tenant", { userId: req.user?._id });
+      await Logger.warning("WhatsApp setting attempt without tenant", { userId: req.user?._id });
       return res.status(403).json({ message: 'No tenant' });
     }
 
@@ -110,7 +110,7 @@ exports.getWhatsAppSetting = async (req, res, next) => {
     await Logger.info("Fetching WhatsApp setting", { tenantId, userId: req.user?._id });
     let setting = await WhatsAppSetting.findOne({ tenant: tenantId });
     if (!setting) {
-      await Logger.warn("No WhatsApp settings found", { tenantId, userId: req.user?._id });
+      await Logger.warning("No WhatsApp settings found", { tenantId, userId: req.user?._id });
       return res.status(404).json({ message: 'No settings found' });
     }
 

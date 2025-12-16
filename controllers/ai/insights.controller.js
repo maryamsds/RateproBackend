@@ -1,0 +1,1 @@
+// controllers/ai/insights.controller.js

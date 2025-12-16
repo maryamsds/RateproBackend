@@ -8,7 +8,7 @@ exports.getPermissions = async (req, res, next) => {
     const permissions = await Permission.find().select('_id name description group');
 
     if (!permissions || permissions.length === 0) {
-      await Logger.warn('getPermissions', 'No permissions found', {
+      await Logger.warning('getPermissions', 'No permissions found', {
         triggeredBy: req.user?.email,
         tenantId: req.tenantId,
         statusCode: 404,

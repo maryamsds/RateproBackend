@@ -120,23 +120,23 @@ exports.updateTenant = async (req, res, next) => {
 
     // Validate inputs
     if (!name) {
-      await Logger.warn('updateTenant: Name required', { userId: req.user?._id });
+      await Logger.warning('updateTenant: Name required', { userId: req.user?._id });
       return res.status(400).json({ message: 'Company name is required' });
     }
 
     // Validate tenantId
     if (!tenantId.match(/^[0-9a-fA-F]{24}$/)) {
-      await Logger.warn('updateTenant: Invalid tenant ID', { tenantId, userId: req.user?._id });
+      await Logger.warning('updateTenant: Invalid tenant ID', { tenantId, userId: req.user?._id });
       return res.status(400).json({ message: 'Invalid tenant ID' });
     }
 
     // Check authorization
     if (req.user.role !== 'companyAdmin') {
-      await Logger.warn('updateTenant: User not companyAdmin', { userId: req.user?._id });
+      await Logger.warning('updateTenant: User not companyAdmin', { userId: req.user?._id });
       return res.status(403).json({ message: 'User is not a companyAdmin' });
     }
     if (!req.user.tenant || req.user.tenant._id.toString() !== tenantId) {
-      await Logger.warn('updateTenant: Unauthorized tenant update attempt', { userId: req.user?._id, tenantId });
+      await Logger.warning('updateTenant: Unauthorized tenant update attempt', { userId: req.user?._id, tenantId });
       return res.status(403).json({ message: 'Unauthorized to update this tenant' });
     }
 
@@ -144,7 +144,7 @@ exports.updateTenant = async (req, res, next) => {
     const departmentDocs = await Promise.all(
       (departments || []).map(async (dept) => {
         if (!dept.name) {
-          await Logger.warn('updateTenant: Department name missing', { tenantId, userId: req.user?._id });
+          await Logger.warning('updateTenant: Department name missing', { tenantId, userId: req.user?._id });
           throw new Error('Department name is required');
         }
 
@@ -158,7 +158,7 @@ exports.updateTenant = async (req, res, next) => {
             { new: true }
           );
           if (!updatedDept) {
-            await Logger.warn('updateTenant: Department not found for update', { deptId: dept._id });
+            await Logger.warning('updateTenant: Department not found for update', { deptId: dept._id });
             throw new Error(`Department ${dept._id} not found`);
           }
           return updatedDept._id;
@@ -191,7 +191,7 @@ exports.updateTenant = async (req, res, next) => {
     ).populate('departments');
 
     if (!updatedTenant) {
-      await Logger.warn('updateTenant: Tenant not found', { tenantId });
+      await Logger.warning('updateTenant: Tenant not found', { tenantId });
       return res.status(404).json({ message: 'Tenant not found' });
     }
 
@@ -212,7 +212,7 @@ exports.getTenant = async (req, res) => {
   try {
     const tenant = await Tenant.findById(req.params.id).populate('departments');
     if (!tenant) {
-      await Logger.warn('getTenant: Tenant not found', { tenantId: req.params.id });
+      await Logger.warning('getTenant: Tenant not found', { tenantId: req.params.id });
       return res.status(404).json({ message: 'Tenant not found' });
     }
 

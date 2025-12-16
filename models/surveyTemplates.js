@@ -51,7 +51,7 @@ const surveyTemplateSchema = new mongoose.Schema({
     enum: [
       'corporate', 'education', 'healthcare', 'hospitality', 
       'sports', 'banking', 'retail', 'government', 
-      'construction', 'automotive', 'technology'
+      'construction', 'automotive', 'technology', 'general'
     ]
   },
   categoryName: {

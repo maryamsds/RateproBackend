@@ -93,7 +93,7 @@ exports.aiDraftSurvey = async (req, res, next) => {
     const { error, value } = draftSchema.validate(req.body);
 
     if (error) {
-      await Logger.warn("aiDraftSurvey", "Validation failed for AI draft request", {
+      await Logger.warning("aiDraftSurvey", "Validation failed for AI draft request", {
         userId: req.user?._id,
         tenant: req.user.tenant,
         message: error.details[0].message
@@ -117,7 +117,7 @@ exports.aiDraftSurvey = async (req, res, next) => {
 
     const tenant = tenantId ? await Tenant.findById(tenantId) : req.user.tenant;
     if (!tenant) {
-      await Logger.warn("aiDraftSurvey", "Tenant not found or missing", {
+      await Logger.warning("aiDraftSurvey", "Tenant not found or missing", {
         userId: req.user?._id,
         tenantId
       });

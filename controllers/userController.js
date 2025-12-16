@@ -1124,7 +1124,7 @@ exports.getAllUsers = async (req, res, next) => {
 
     const { error, value } = getAllUsersSchema.validate(req.query);
     if (error) {
-      await Logger.warn("Validation failed for getAllUsers", { error: error.details[0].message, userId: req.user?._id });
+      await Logger.warning("Validation failed for getAllUsers", { error: error.details[0].message, userId: req.user?._id });
       return res.status(400).json({ message: error.details[0].message });
     }
 
@@ -1161,7 +1161,7 @@ exports.getAllUsers = async (req, res, next) => {
         }
         await Logger.info("Tenant scoping applied for non-admin", { tenantId: req.tenantId, role: req.user.role });
       } else {
-        await Logger.warn("Access denied for non-admin user without tenant", { userId: req.user?._id });
+        await Logger.warning("Access denied for non-admin user without tenant", { userId: req.user?._id });
         return res.status(403).json({
           message: "Access denied: No tenant associated with this user",
         });
@@ -1198,7 +1198,7 @@ exports.getUserById = async (req, res, next) => {
 
     const { error } = idSchema.validate(req.params);
     if (error) {
-      await Logger.warn("Validation failed for getUserById", { error: error.details[0].message, userId: req.user?._id });
+      await Logger.warning("Validation failed for getUserById", { error: error.details[0].message, userId: req.user?._id });
       return res.status(400).json({ message: error.details[0].message });
     }
 
@@ -1211,12 +1211,12 @@ exports.getUserById = async (req, res, next) => {
       .populate("customRoles department");
 
     if (!user) {
-      await Logger.warn("User not found", { targetUserId: req.params.id, userId: req.user?._id });
+      await Logger.warning("User not found", { targetUserId: req.params.id, userId: req.user?._id });
       return res.status(404).json({ message: "User not found" });
     }
 
     if (req.user.role !== "admin" && user.tenant && req.tenantId !== user.tenant._id.toString()) {
-      await Logger.warn("Access denied due to tenant mismatch", { userId: req.user?._id, targetUserId: req.params.id });
+      await Logger.warning("Access denied due to tenant mismatch", { userId: req.user?._id, targetUserId: req.params.id });
       return res.status(403).json({ message: "Access denied: Wrong tenant" });
     }
 
@@ -1236,7 +1236,7 @@ exports.exportUserDataPDF = async (req, res, next) => {
 
     const { error } = idSchema.validate(req.params);
     if (error) {
-      await Logger.warn("Validation failed for exportUserDataPDF", { error: error.details[0].message, requesterId: req.user?._id });
+      await Logger.warning("Validation failed for exportUserDataPDF", { error: error.details[0].message, requesterId: req.user?._id });
       return res.status(400).json({ message: error.details[0].message });
     }
 
@@ -1253,7 +1253,7 @@ exports.exportUserDataPDF = async (req, res, next) => {
       });
 
     if (!user) {
-      await Logger.warn("User not found for PDF export", { targetUserId: req.params.id, requesterId: req.user?._id });
+      await Logger.warning("User not found for PDF export", { targetUserId: req.params.id, requesterId: req.user?._id });
       return res.status(404).json({ message: "User not found" });
     }
 
@@ -1269,21 +1269,21 @@ exports.exportUserDataPDF = async (req, res, next) => {
       );
 
       if (!hasPermission) {
-        await Logger.warn("Member attempted PDF export without permission", { requesterId: req.user._id });
+        await Logger.warning("Member attempted PDF export without permission", { requesterId: req.user._id });
         return res.status(403).json({ message: "Access denied: Permission 'user:export' required" });
       }
 
       if (user.tenant && user.tenant._id.toString() !== req.user.tenant._id.toString()) {
-        await Logger.warn("Member attempted PDF export for a different tenant", { requesterId: req.user._id, targetTenantId: user.tenant._id });
+        await Logger.warning("Member attempted PDF export for a different tenant", { requesterId: req.user._id, targetTenantId: user.tenant._id });
         return res.status(403).json({ message: "Access denied: Cannot export users from a different tenant" });
       }
     } else if (req.user.role === "companyAdmin") {
       if (user.tenant && req.tenantId !== user.tenant._id.toString()) {
-        await Logger.warn("CompanyAdmin attempted PDF export for wrong tenant", { requesterId: req.user._id, targetTenantId: user.tenant._id });
+        await Logger.warning("CompanyAdmin attempted PDF export for wrong tenant", { requesterId: req.user._id, targetTenantId: user.tenant._id });
         return res.status(403).json({ message: "Access denied: Wrong tenant" });
       }
     } else if (req.user.role !== "admin") {
-      await Logger.warn("Unauthorized role attempted PDF export", { requesterId: req.user._id, role: req.user.role });
+      await Logger.warning("Unauthorized role attempted PDF export", { requesterId: req.user._id, role: req.user.role });
       return res.status(403).json({ message: "Access denied: Insufficient permissions" });
     }
 
@@ -1367,7 +1367,7 @@ exports.sendNotification = async (req, res, next) => {
 
     if (bodyError || paramError) {
       // ⚠️ Agar validation fail ho jaye to warning log karo aur 400 bhej do
-      await Logger.warn("Invalid request for sendNotification", {
+      await Logger.warning("Invalid request for sendNotification", {
         error: (bodyError || paramError).details[0].message
       });
       return res.status(400).json({
@@ -1382,14 +1382,14 @@ exports.sendNotification = async (req, res, next) => {
 
     // ❌ Step 3: Check agar user exist nahi karta
     if (!user) {
-      await Logger.warn("User not found in sendNotification", { userId: req.params.id });
+      await Logger.warning("User not found in sendNotification", { userId: req.params.id });
       return res.status(404).json({ message: "User not found" });
     }
 
     // 🔒 Step 4: Tenant level access control check
     // sirf admin ya same-tenant user hi doosre tenant ko message bhej sakta hai
     if (req.user.role !== "admin" && user.tenant && req.tenantId !== user.tenant.toString()) {
-      await Logger.warn("Access denied due to tenant mismatch", {
+      await Logger.warning("Access denied due to tenant mismatch", {
         requesterId: req.user._id,
         userTenant: user.tenant
       });
@@ -1432,7 +1432,7 @@ exports.sendNotification = async (req, res, next) => {
 
     } catch (templateError) {
       // 🔁 Step 6: Agar template fail ho jaye to fallback simple email se
-      await Logger.warn(functionName, 'Template email failed, using fallback', {
+      await Logger.warning(functionName, 'Template email failed, using fallback', {
         userId: req.user?._id,
         targetUserId: req.params.id,
         error: templateError.message
@@ -1464,14 +1464,14 @@ exports.updateMe = async (req, res, next) => {
     // ----------------- VALIDATION -----------------
     const { error } = updateMeSchema.validate(req.body);
     if (error) {
-      await Logger.warn("Validation failed in updateMe", { error: error.details[0].message, userId: req.user?._id });
+      await Logger.warning("Validation failed in updateMe", { error: error.details[0].message, userId: req.user?._id });
       return res.status(400).json({ message: error.details[0].message });
     }
 
     // ----------------- JWT VERIFY -----------------
     const token = req.cookies?.accessToken;
     if (!token) {
-      await Logger.warn("No token provided in updateMe", { userId: req.user?._id });
+      await Logger.warning("No token provided in updateMe", { userId: req.user?._id });
       return res.status(401).json({ message: "No token provided" });
     }
 
@@ -1479,7 +1479,7 @@ exports.updateMe = async (req, res, next) => {
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
-      await Logger.warn("Invalid/expired token in updateMe", { error: err.message });
+      await Logger.warning("Invalid/expired token in updateMe", { error: err.message });
       return res.status(401).json({ message: "Invalid or expired token" });
     }
 
@@ -1488,7 +1488,7 @@ exports.updateMe = async (req, res, next) => {
     // ----------------- FETCH USER -----------------
     const user = await User.findById(userId).populate("tenant");
     if (!user) {
-      await Logger.warn("User not found in updateMe", { userId });
+      await Logger.warning("User not found in updateMe", { userId });
       return res.status(404).json({ message: "User not found" });
     }
 
@@ -1504,7 +1504,7 @@ exports.updateMe = async (req, res, next) => {
     if (req.body.tenant && user.role === "companyAdmin") {
       let tenant = await Tenant.findById(user.tenant?._id);
       if (!tenant) {
-        await Logger.warn("Tenant not found in updateMe", { userId, tenantId: user.tenant?._id });
+        await Logger.warning("Tenant not found in updateMe", { userId, tenantId: user.tenant?._id });
         return res.status(404).json({ message: "Tenant not found" });
       }
 

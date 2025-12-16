@@ -222,7 +222,7 @@ exports.getUserPermissions = async (req, res, next) => {
         });
 
         if (!user) {
-            await Logger.warn('getUserPermissions', 'User not found while fetching permissions', {
+            await Logger.warning('getUserPermissions', 'User not found while fetching permissions', {
                 triggeredBy: req.user?.email,
                 userId,
                 tenantId,

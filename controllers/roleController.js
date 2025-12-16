@@ -314,7 +314,7 @@ exports.removeRoleFromUser = async (req, res, next) => {
     }).validate(req.params);
 
     if (bodyError || paramError) {
-      await logger.warn('removeRoleFromUser: Validation failed', {
+      await logger.warning('removeRoleFromUser: Validation failed', {
         bodyError,
         paramError,
       });
@@ -358,7 +358,7 @@ exports.removeRoleFromUser = async (req, res, next) => {
       );
 
       if (!hasPermission) {
-        await logger.warn('removeRoleFromUser: Missing permission role:remove', {
+        await logger.warning('removeRoleFromUser: Missing permission role:remove', {
           userId: req.user._id,
         });
         return res.status(403).json({
@@ -366,7 +366,7 @@ exports.removeRoleFromUser = async (req, res, next) => {
         });
       }
     } else {
-      await logger.warn('removeRoleFromUser: Invalid user role', {
+      await logger.warning('removeRoleFromUser: Invalid user role', {
         userRole: req.user.role,
       });
       return res.status(403).json({
@@ -376,13 +376,13 @@ exports.removeRoleFromUser = async (req, res, next) => {
 
     const role = await CustomRole.findById(roleId).populate('tenant');
     if (!role) {
-      await logger.warn('removeRoleFromUser: Role not found', { roleId });
+      await logger.warning('removeRoleFromUser: Role not found', { roleId });
       return res.status(404).json({ message: 'Role not found' });
     }
 
     const user = await User.findById(userId);
     if (!user) {
-      await logger.warn('removeRoleFromUser: User not found', { userId });
+      await logger.warning('removeRoleFromUser: User not found', { userId });
       return res.status(404).json({ message: 'User not found' });
     }
 
@@ -392,7 +392,7 @@ exports.removeRoleFromUser = async (req, res, next) => {
       role.tenant &&
       role.tenant._id.toString() !== req.tenantId
     ) {
-      await logger.warn(
+      await logger.warning(
         'removeRoleFromUser: Attempt to remove role from another tenant',
         { tenantId: req.tenantId, roleTenant: role.tenant._id }
       );
@@ -406,7 +406,7 @@ exports.removeRoleFromUser = async (req, res, next) => {
       user.tenant &&
       user.tenant.toString() !== req.tenantId
     ) {
-      await logger.warn(
+      await logger.warning(
         'removeRoleFromUser: Attempt to remove role from user of another tenant',
         { tenantId: req.tenantId, userTenant: user.tenant }
       );
@@ -454,7 +454,7 @@ exports.updateRole = async (req, res, next) => {
     }).validate(req.params);
 
     if (bodyError || paramError) {
-      await logger.warn('updateRole: Validation failed', {
+      await logger.warning('updateRole: Validation failed', {
         bodyError,
         paramError,
       });
@@ -497,7 +497,7 @@ exports.updateRole = async (req, res, next) => {
       );
 
       if (!hasPermission) {
-        await logger.warn('updateRole: Missing permission role:update', {
+        await logger.warning('updateRole: Missing permission role:update', {
           userId: req.user._id,
         });
         return res
@@ -505,7 +505,7 @@ exports.updateRole = async (req, res, next) => {
           .json({ message: "Access denied: Permission 'role:update' required" });
       }
     } else {
-      await logger.warn('updateRole: Invalid user role', {
+      await logger.warning('updateRole: Invalid user role', {
         userRole: req.user.role,
       });
       return res.status(403).json({
@@ -517,7 +517,7 @@ exports.updateRole = async (req, res, next) => {
     // Fetch role
     const role = await CustomRole.findById(roleId).populate('tenant');
     if (!role) {
-      await logger.warn('updateRole: Role not found', { roleId });
+      await logger.warning('updateRole: Role not found', { roleId });
       return res.status(404).json({ message: 'Role not found' });
     }
 
@@ -528,7 +528,7 @@ exports.updateRole = async (req, res, next) => {
       role.tenant._id &&
       role.tenant._id.toString() !== req.tenantId
     ) {
-      await logger.warn(
+      await logger.warning(
         'updateRole: Attempt to update role from different tenant',
         { tenantId: req.tenantId, roleTenant: role.tenant._id }
       );
@@ -543,7 +543,7 @@ exports.updateRole = async (req, res, next) => {
         _id: { $in: permissions },
       });
       if (validPermissions.length !== permissions.length) {
-        await logger.warn('updateRole: Invalid permission IDs provided', {
+        await logger.warning('updateRole: Invalid permission IDs provided', {
           providedCount: permissions.length,
           validCount: validPermissions.length,
         });
@@ -585,7 +585,7 @@ exports.deleteRole = async (req, res, next) => {
     }).validate(req.params);
 
     if (error) {
-      await logger.warn('deleteRole: Validation failed', {
+      await logger.warning('deleteRole: Validation failed', {
         details: error.details[0],
       });
       return res.status(400).json({ message: error.details[0].message });
@@ -623,7 +623,7 @@ exports.deleteRole = async (req, res, next) => {
       );
 
       if (!hasPermission) {
-        await logger.warn('deleteRole: Missing permission role:delete', {
+        await logger.warning('deleteRole: Missing permission role:delete', {
           userId: req.user._id,
         });
         return res
@@ -631,7 +631,7 @@ exports.deleteRole = async (req, res, next) => {
           .json({ message: "Access denied: Permission 'role:delete' required" });
       }
     } else {
-      await logger.warn('deleteRole: Invalid role access attempt', {
+      await logger.warning('deleteRole: Invalid role access attempt', {
         userRole: req.user.role,
       });
       return res.status(403).json({
@@ -643,7 +643,7 @@ exports.deleteRole = async (req, res, next) => {
     // --- Find Role ---
     const role = await CustomRole.findById(roleId).populate('tenant');
     if (!role) {
-      await logger.warn('deleteRole: Role not found', { roleId });
+      await logger.warning('deleteRole: Role not found', { roleId });
       return res.status(404).json({ message: 'Role not found' });
     }
 
@@ -654,7 +654,7 @@ exports.deleteRole = async (req, res, next) => {
       role.tenant._id &&
       role.tenant._id.toString() !== req.tenantId
     ) {
-      await logger.warn('deleteRole: Cross-tenant deletion attempt', {
+      await logger.warning('deleteRole: Cross-tenant deletion attempt', {
         requestTenant: req.tenantId,
         roleTenant: role.tenant._id,
       });
@@ -696,7 +696,7 @@ exports.getUsersByRole = async (req, res, next) => {
     // --- Validate Params ---
     const { error } = getUsersByRoleSchema.validate(req.params);
     if (error) {
-      await logger.warn("getUsersByRole: Validation failed", {
+      await logger.warning("getUsersByRole: Validation failed", {
         details: error.details[0],
         performedBy: req.user?._id,
       });
@@ -735,7 +735,7 @@ exports.getUsersByRole = async (req, res, next) => {
       );
 
       if (!hasPermission) {
-        await logger.warn("getUsersByRole: Missing permission 'role:read'", {
+        await logger.warning("getUsersByRole: Missing permission 'role:read'", {
           userId: req.user._id,
         });
         return res
@@ -747,7 +747,7 @@ exports.getUsersByRole = async (req, res, next) => {
         userId: req.user._id,
       });
     } else {
-      await logger.warn("getUsersByRole: Unauthorized role access attempt", {
+      await logger.warning("getUsersByRole: Unauthorized role access attempt", {
         userRole: req.user.role,
         userId: req.user._id,
       });
@@ -764,7 +764,7 @@ exports.getUsersByRole = async (req, res, next) => {
     );
 
     if (!role) {
-      await logger.warn("getUsersByRole: Role not found", { roleId });
+      await logger.warning("getUsersByRole: Role not found", { roleId });
       return res.status(404).json({ message: "Role not found" });
     }
 
@@ -775,7 +775,7 @@ exports.getUsersByRole = async (req, res, next) => {
       role.tenant._id &&
       role.tenant._id.toString() !== req.tenantId
     ) {
-      await logger.warn("getUsersByRole: Cross-tenant access attempt", {
+      await logger.warning("getUsersByRole: Cross-tenant access attempt", {
         requestTenant: req.tenantId,
         roleTenant: role.tenant._id,
         performedBy: req.user._id,

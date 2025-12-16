@@ -632,7 +632,7 @@ exports.getSurveyTemplateById = async (req, res) => {
       .populate('createdBy', 'name email');
 
     if (!template) {
-      await Logger.warn("⚠️ Survey template not found", { templateId: req.params.id });
+      await Logger.warning("⚠️ Survey template not found", { templateId: req.params.id });
       return res.status(404).json({
         success: false,
         message: 'Survey template not found'
@@ -679,7 +679,7 @@ exports.createSurveyTemplate = async (req, res) => {
     });
 
     if (existingTemplate) {
-      await Logger.warn("⚠️ Template with same name already exists", { name, userId: req.user?.id });
+      await Logger.warning("⚠️ Template with same name already exists", { name, userId: req.user?.id });
       return res.status(400).json({
         success: false,
         message: 'A template with this name already exists'
@@ -750,7 +750,7 @@ exports.updateSurveyTemplate = async (req, res) => {
     // Check if template exists
     let template = await surveyTemplates.findById(req.params.id);
     if (!template) {
-      await Logger.warn("⚠️ Survey template not found", { templateId: req.params.id, userId: req.user?.id });
+      await Logger.warning("⚠️ Survey template not found", { templateId: req.params.id, userId: req.user?.id });
       return res.status(404).json({
         success: false,
         message: 'Survey template not found'
@@ -765,7 +765,7 @@ exports.updateSurveyTemplate = async (req, res) => {
       });
 
       if (existingTemplate) {
-        await Logger.warn("⚠️ Template name conflict", { name, templateId: req.params.id, userId: req.user?.id });
+        await Logger.warning("⚠️ Template name conflict", { name, templateId: req.params.id, userId: req.user?.id });
         return res.status(400).json({
           success: false,
           message: 'A template with this name already exists'
@@ -829,7 +829,7 @@ exports.deleteSurveyTemplate = async (req, res) => {
     const template = await surveyTemplates.findById(req.params.id);
 
     if (!template) {
-      await Logger.warn("⚠️ Survey template not found", { templateId: req.params.id, userId: req.user?.id });
+      await Logger.warning("⚠️ Survey template not found", { templateId: req.params.id, userId: req.user?.id });
       return res.status(404).json({
         success: false,
         message: 'Survey template not found'
@@ -871,7 +871,7 @@ exports.useSurveyTemplate = async (req, res) => {
     );
 
     if (!template) {
-      await Logger.warn("⚠️ Survey template not found while incrementing usage count", { templateId: req.params.id, userId: req.user?.id });
+      await Logger.warning("⚠️ Survey template not found while incrementing usage count", { templateId: req.params.id, userId: req.user?.id });
       return res.status(404).json({
         success: false,
         message: 'Survey template not found'
@@ -907,7 +907,7 @@ exports.previewSurveyTemplate = async (req, res) => {
       .populate('createdBy', 'name email');
 
     if (!template) {
-      await Logger.warn("⚠️ Survey template not found for preview", { templateId: req.params.id, userId: req.user?.id });
+      await Logger.warning("⚠️ Survey template not found for preview", { templateId: req.params.id, userId: req.user?.id });
       return res.status(404).json({
         success: false,
         message: 'Survey template not found'
@@ -945,7 +945,7 @@ exports.publishTemplate = async (req, res) => {
     const template = await surveyTemplates.findById(req.params.id);
 
     if (!template) {
-      await Logger.warn("⚠️ Template not found for publishing", { templateId: req.params.id, userId: req.user?.id });
+      await Logger.warning("⚠️ Template not found for publishing", { templateId: req.params.id, userId: req.user?.id });
       return res.status(404).json({
         success: false,
         message: 'Template not found'
@@ -984,7 +984,7 @@ exports.updateTemplateStatus = async (req, res) => {
     const template = await surveyTemplates.findById(req.params.id);
 
     if (!template) {
-      await Logger.warn("⚠️ Template not found for status update", { templateId: req.params.id, userId: req.user?.id });
+      await Logger.warning("⚠️ Template not found for status update", { templateId: req.params.id, userId: req.user?.id });
       return res.status(404).json({
         success: false,
         message: 'Template not found'
@@ -1033,7 +1033,7 @@ exports.saveDraftTemplate = async (req, res) => {
     });
 
     if (existingTemplate) {
-      await Logger.warn("⚠️ Template name already exists", { name, userId: req.user?._id });
+      await Logger.warning("⚠️ Template name already exists", { name, userId: req.user?._id });
       return res.status(400).json({
         success: false,
         message: 'A template with this name already exists'

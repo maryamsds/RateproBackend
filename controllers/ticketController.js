@@ -209,7 +209,7 @@ exports.createTicket = async (req, res, next) => {
         } catch (emailError) {
 
             // 5) Fallback to simple HTML email
-            await Logger.warn("createTicket", "Template failed, sending fallback email", {
+            await Logger.warning("createTicket", "Template failed, sending fallback email", {
                 message: emailError.message,
             });
 

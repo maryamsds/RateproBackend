@@ -9,7 +9,7 @@ exports.sendSMSHandler = async (req, res, next) => {
 
     // --- Validate input ---
     if (!to || !body) {
-      await Logger.warn("sendSMSHandler: Missing required fields", {
+      await Logger.warning("sendSMSHandler: Missing required fields", {
         receivedBody: req.body,
         performedBy: req.user?._id,
       });
