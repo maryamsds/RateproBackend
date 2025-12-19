@@ -6,10 +6,13 @@ exports.getSurveyById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    await Logger.info("getSurveyById: request received", {
-      surveyId: id,
-      userId: req.user?._id,
-      tenantId: req.user?.tenant,
+    Logger.info("getSurveyById", "Request received for fetching survey by ID", {
+      context: {
+        surveyId: id,
+        userId: req.user?._id,
+        tenantId: req.user?.tenant,
+      },
+      req
     });
 
     const survey = await getSurveyByIdService({
@@ -23,9 +26,9 @@ exports.getSurveyById = async (req, res, next) => {
 
     res.status(200).json({ survey });
   } catch (err) {
-    await Logger.error("getSurveyById: error", {
-      error: err.message,
-      stack: err.stack,
+    Logger.error("getSurveyById", "Error fetching survey by ID", {
+      error: err,
+      req
     });
     next(err);
   }

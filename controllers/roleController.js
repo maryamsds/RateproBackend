@@ -5,7 +5,7 @@ const User = require("../models/User");
 const Permission = require("../models/Permission");
 const Joi = require("joi");
 const crypto = require("crypto");
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 
 // Validation Schemas
 const createRoleSchema = Joi.object({
@@ -117,24 +117,30 @@ exports.createRole = async (req, res) => {
 
     await role.populate("permissions", "name");
 
-    await Logger.info("createRole", "Role created successfully", {
-      triggeredBy: req.user?.email,
-      tenantId,
-      roleId: role._id,
-      roleName: role.name,
-      totalPermissions: permissions.length,
-      statusCode: 201,
+    Logger.info("createRole", "Role created successfully", {
+      context: {
+        triggeredBy: req.user?.email,
+        tenantId,
+        roleId: role._id,
+        roleName: role.name,
+        totalPermissions: permissions.length,
+        statusCode: 201,
+      },
+      req
     });
+
 
     return res.status(201).json({ role });
   } catch (error) {
     console.error("💥 Error creating role:", error);
 
-    await Logger.error("createRole", "Unhandled error in role creation", {
-      triggeredBy: req.user?.email,
-      tenantId: req.tenantId,
-      message: error.message,
-      stack: error.stack,
+    Logger.error("createRole", "Unhandled error in role creation", {
+      error,
+      context: {
+        triggeredBy: req.user?.email,
+        tenantId: req.tenantId,
+      },
+      req
     });
 
     return res.status(500).json({ message: "Failed to create role", error: error.message });
@@ -182,22 +188,27 @@ exports.getRoles = async (req, res, next) => {
     const roles = await CustomRole.find(query).populate("permissions tenant");
     const total = await CustomRole.countDocuments(query);
 
-    await Logger.info("getRoles", "Roles retrieved successfully", {
-      triggeredBy: req.user?.email,
-      tenantId: req.tenantId,
-      total,
-      statusCode: 200,
+    Logger.info("getRoles", "Roles retrieved successfully", {
+      context: {
+        triggeredBy: req.user?.email,
+        tenantId: req.tenantId,
+        total,
+        statusCode: 200,
+      },
+      req
     });
 
     return res.status(200).json({ message: "Roles retrieved", roles, total });
   } catch (err) {
     console.error("💥 Error getting roles:", err);
 
-    await Logger.error("getRoles", "Unhandled error in getRoles controller", {
-      triggeredBy: req.user?.email,
-      tenantId: req.tenantId,
-      message: err.message,
-      stack: err.stack,
+    Logger.error("getRoles", "Unhandled error in getRoles controller", {
+      error,
+      context: {
+        triggeredBy: req.user?.email,
+        tenantId: req.tenantId,
+      },
+      req
     });
 
     return res.status(500).json({ message: "Failed to fetch roles", error: err.message });
@@ -284,22 +295,28 @@ exports.assignRoleToUser = async (req, res, next) => {
       .select("-password")
       .populate("tenant customRoles");
 
-    await Logger.info("assignRoleToUser", "Role assigned successfully", {
-      triggeredBy: req.user?.email,
-      tenantId: req.tenantId,
-      assignedRole: role.name,
-      targetUser: updatedUser.email,
-      statusCode: 200,
+    Logger.info("assignRoleToUser", "Role assigned successfully", {
+      context: {
+        triggeredBy: req.user?.email,
+        tenantId: req.tenantId,
+        assignedRole: role.name,
+        targetUser: updatedUser.email,
+        statusCode: 200,
+      },
+      req
     });
+
 
     return res.status(200).json({ message: "Role assigned", user: updatedUser });
   } catch (err) {
     console.error("💥 Error assigning role:", err);
-    await Logger.error("assignRoleToUser", "Unexpected error while assigning role", {
-      triggeredBy: req.user?.email,
-      tenantId: req.tenantId,
-      message: err.message,
-      stack: err.stack,
+    Logger.error("assignRoleToUser", "Unexpected error while assigning role", {
+      error,
+      context: {
+        triggeredBy: req.user?.email,
+        tenantId: req.tenantId,
+      },
+      req
     });
     return res.status(500).json({ message: "Failed to assign role", error: err.message });
   }
@@ -314,9 +331,12 @@ exports.removeRoleFromUser = async (req, res, next) => {
     }).validate(req.params);
 
     if (bodyError || paramError) {
-      await logger.warning('removeRoleFromUser: Validation failed', {
-        bodyError,
-        paramError,
+      Logger.warn("removeRoleFromUser", "Validation failed", {
+        context: {
+          bodyError,
+          paramError,
+        },
+        req
       });
       return res
         .status(400)
@@ -326,17 +346,23 @@ exports.removeRoleFromUser = async (req, res, next) => {
     const { userId } = req.params;
     const { roleId } = req.body;
 
-    await logger.info('removeRoleFromUser: Starting role removal', {
-      userId,
-      roleId,
-      performedBy: req.user._id,
-      tenantId: req.tenantId,
+    Logger.info("removeRoleFromUser", "Starting role removal", {
+      context: {
+        userId,
+        roleId,
+        performedBy: req.user._id,
+        tenantId: req.tenantId,
+      },
+      req
     });
 
     // --- Role-based restrictions ---
     if (req.user.role === 'companyAdmin') {
-      await logger.info('removeRoleFromUser: Request by companyAdmin', {
-        adminId: req.user._id,
+      Logger.info("removeRoleFromUser", "Request by companyAdmin", {
+        context: {
+          adminId: req.user._id,
+        },
+        req
       });
     } else if (req.user.role === 'member') {
       const populatedUser = await User.findById(req.user._id).populate({
@@ -345,8 +371,11 @@ exports.removeRoleFromUser = async (req, res, next) => {
       });
 
       if (!populatedUser) {
-        await logger.error('removeRoleFromUser: Requesting user not found', {
-          userId: req.user._id,
+        Logger.error("removeRoleFromUser", "Requesting user not found", {
+          context: {
+            userId: req.user._id,
+          },
+          req
         });
         return res.status(404).json({ message: 'User not found' });
       }
@@ -358,16 +387,22 @@ exports.removeRoleFromUser = async (req, res, next) => {
       );
 
       if (!hasPermission) {
-        await logger.warning('removeRoleFromUser: Missing permission role:remove', {
-          userId: req.user._id,
+        Logger.warn("removeRoleFromUser", "Missing permission role:remove", {
+          context: {
+            userId: req.user._id,
+          },
+          req
         });
         return res.status(403).json({
           message: "Access denied: Permission 'role:remove' required",
         });
       }
     } else {
-      await logger.warning('removeRoleFromUser: Invalid user role', {
-        userRole: req.user.role,
+      Logger.warn("removeRoleFromUser", "Invalid user role", {
+        context: {
+          userRole: req.user.role,
+        },
+        req
       });
       return res.status(403).json({
         message: 'Only companyAdmin or member (with permission) can remove roles',
@@ -376,13 +411,23 @@ exports.removeRoleFromUser = async (req, res, next) => {
 
     const role = await CustomRole.findById(roleId).populate('tenant');
     if (!role) {
-      await logger.warning('removeRoleFromUser: Role not found', { roleId });
+      Logger.warn("removeRoleFromUser", "Role not found", {
+        context: {
+          roleId,
+        },
+        req
+      });
       return res.status(404).json({ message: 'Role not found' });
     }
 
     const user = await User.findById(userId);
     if (!user) {
-      await logger.warning('removeRoleFromUser: User not found', { userId });
+      Logger.warn("removeRoleFromUser", "User not found", {
+        context: {
+          userId,
+        },
+        req
+      });
       return res.status(404).json({ message: 'User not found' });
     }
 
@@ -392,10 +437,13 @@ exports.removeRoleFromUser = async (req, res, next) => {
       role.tenant &&
       role.tenant._id.toString() !== req.tenantId
     ) {
-      await logger.warning(
-        'removeRoleFromUser: Attempt to remove role from another tenant',
-        { tenantId: req.tenantId, roleTenant: role.tenant._id }
-      );
+      Logger.warn("removeRoleFromUser", "Attempt to remove role from another tenant", {
+        context: {
+          tenantId: req.tenantId,
+          roleTenant: role.tenant._id,
+        },
+        req
+      });
       return res
         .status(403)
         .json({ message: 'Cannot remove role from different tenant' });
@@ -406,10 +454,13 @@ exports.removeRoleFromUser = async (req, res, next) => {
       user.tenant &&
       user.tenant.toString() !== req.tenantId
     ) {
-      await logger.warning(
-        'removeRoleFromUser: Attempt to remove role from user of another tenant',
-        { tenantId: req.tenantId, userTenant: user.tenant }
-      );
+      Logger.warn("removeRoleFromUser", "Attempt to remove role from user of another tenant", {
+        context: {
+          tenantId: req.tenantId,
+          userTenant: user.tenant,
+        },
+        req
+      });
       return res
         .status(403)
         .json({ message: 'Cannot remove role from user of different tenant' });
@@ -425,10 +476,13 @@ exports.removeRoleFromUser = async (req, res, next) => {
     role.userCount = role.users.length;
     await role.save();
 
-    await logger.info('removeRoleFromUser: Role successfully removed', {
-      userId,
-      roleId,
-      tenantId: req.tenantId,
+    Logger.info("removeRoleFromUser", "Role successfully removed", {
+      context: {
+        userId,
+        roleId,
+        tenantId: req.tenantId,
+      },
+      req
     });
 
     const updatedUser = await User.findById(userId)
@@ -437,9 +491,13 @@ exports.removeRoleFromUser = async (req, res, next) => {
 
     return res.status(200).json({ message: 'Role removed', user: updatedUser });
   } catch (err) {
-    await logger.error('removeRoleFromUser: Error', {
-      error: err.message,
-      stack: err.stack,
+    Logger.error("removeRoleFromUser", "Error while removing role", {
+      error,
+      context: {
+        userId,
+        roleId,
+      },
+      req
     });
     next(err);
   }
@@ -454,9 +512,12 @@ exports.updateRole = async (req, res, next) => {
     }).validate(req.params);
 
     if (bodyError || paramError) {
-      await logger.warning('updateRole: Validation failed', {
-        bodyError,
-        paramError,
+      Logger.warn("updateRole", "Validation failed", {
+        context: {
+          bodyError,
+          paramError,
+        },
+        req
       });
       return res
         .status(400)
@@ -466,16 +527,22 @@ exports.updateRole = async (req, res, next) => {
     const { roleId } = req.params;
     const { name, permissions, description, tenantId } = req.body;
 
-    await logger.info('updateRole: Starting role update', {
-      roleId,
-      performedBy: req.user._id,
-      tenantId: req.tenantId,
+    Logger.info("updateRole", "Starting role update", {
+      context: {
+        roleId,
+        performedBy: req.user._id,
+        tenantId: req.tenantId,
+      },
+      req
     });
 
     // --- Role-based restrictions ---
     if (req.user.role === 'companyAdmin') {
-      await logger.info('updateRole: Request by companyAdmin', {
-        adminId: req.user._id,
+      Logger.info("updateRole", "Request by companyAdmin", {
+        context: {
+          adminId: req.user._id,
+        },
+        req
       });
     } else if (req.user.role === 'member') {
       const populatedUser = await User.findById(req.user._id).populate({
@@ -484,8 +551,11 @@ exports.updateRole = async (req, res, next) => {
       });
 
       if (!populatedUser) {
-        await logger.error('updateRole: Requesting user not found', {
-          userId: req.user._id,
+        Logger.error("updateRole", "Requesting user not found", {
+          context: {
+            userId: req.user._id,
+          },
+          req
         });
         return res.status(404).json({ message: 'User not found' });
       }
@@ -497,16 +567,22 @@ exports.updateRole = async (req, res, next) => {
       );
 
       if (!hasPermission) {
-        await logger.warning('updateRole: Missing permission role:update', {
-          userId: req.user._id,
+        Logger.warn("updateRole", "Missing permission role:update", {
+          context: {
+            userId: req.user._id,
+          },
+          req
         });
         return res
           .status(403)
           .json({ message: "Access denied: Permission 'role:update' required" });
       }
     } else {
-      await logger.warning('updateRole: Invalid user role', {
-        userRole: req.user.role,
+      Logger.warn("updateRole", "Invalid user role", {
+        context: {
+          userRole: req.user.role,
+        },
+        req
       });
       return res.status(403).json({
         message:
@@ -517,7 +593,12 @@ exports.updateRole = async (req, res, next) => {
     // Fetch role
     const role = await CustomRole.findById(roleId).populate('tenant');
     if (!role) {
-      await logger.warning('updateRole: Role not found', { roleId });
+      Logger.warn("updateRole", "Role not found", {
+        context: {
+          roleId,
+        },
+        req
+      });
       return res.status(404).json({ message: 'Role not found' });
     }
 
@@ -528,10 +609,13 @@ exports.updateRole = async (req, res, next) => {
       role.tenant._id &&
       role.tenant._id.toString() !== req.tenantId
     ) {
-      await logger.warning(
-        'updateRole: Attempt to update role from different tenant',
-        { tenantId: req.tenantId, roleTenant: role.tenant._id }
-      );
+      Logger.warn("updateRole", "Attempt to update role from different tenant", {
+        context: {
+          tenantId: req.tenantId,
+          roleTenant: role.tenant._id,
+        },
+        req
+      });
       return res
         .status(403)
         .json({ message: 'Cannot update role from different tenant' });
@@ -543,9 +627,11 @@ exports.updateRole = async (req, res, next) => {
         _id: { $in: permissions },
       });
       if (validPermissions.length !== permissions.length) {
-        await logger.warning('updateRole: Invalid permission IDs provided', {
-          providedCount: permissions.length,
-          validCount: validPermissions.length,
+        Logger.warn("updateRole", "Invalid permission IDs provided", {
+          context: {
+            providedCount: permissions.length,
+            validCount: validPermissions.length,
+          },
         });
         return res.status(400).json({ message: 'Invalid permission IDs' });
       }
@@ -558,9 +644,12 @@ exports.updateRole = async (req, res, next) => {
     role.tenant = tenantId || role.tenant;
 
     await role.save();
-    await logger.info('updateRole: Role successfully updated', {
-      roleId,
-      updatedBy: req.user._id,
+    Logger.info("updateRole", "Role successfully updated", {
+      context: {
+        roleId,
+        updatedBy: req.user._id,
+      },
+      req
     });
 
     const updatedRole = await CustomRole.findById(roleId).populate(
@@ -569,9 +658,12 @@ exports.updateRole = async (req, res, next) => {
 
     return res.status(200).json({ message: 'Role updated', role: updatedRole });
   } catch (err) {
-    await logger.error('updateRole: Error', {
-      error: err.message,
-      stack: err.stack,
+    Logger.error("updateRole", "Error updating role", {
+      context: {
+        error: err.message,
+        stack: err.stack,
+      },
+      req
     });
     next(err);
   }
@@ -585,23 +677,32 @@ exports.deleteRole = async (req, res, next) => {
     }).validate(req.params);
 
     if (error) {
-      await logger.warning('deleteRole: Validation failed', {
-        details: error.details[0],
+      Logger.warn("deleteRole", "Validation failed", {
+        context: {
+          details: error.details[0],
+        },
+        req
       });
       return res.status(400).json({ message: error.details[0].message });
     }
 
     const { roleId } = req.params;
-    await logger.info('deleteRole: Start deleting role', {
-      roleId,
-      performedBy: req.user._id,
-      tenantId: req.tenantId,
+    Logger.info("deleteRole", "Start deleting role", {
+      context: {
+        roleId,
+        performedBy: req.user._id,
+        tenantId: req.tenantId,
+      },
+      req
     });
 
     // --- Role-based restrictions ---
     if (req.user.role === 'companyAdmin') {
-      await logger.info('deleteRole: Request by companyAdmin', {
-        adminId: req.user._id,
+      Logger.info("deleteRole", "Request by companyAdmin", {
+        context: {
+          adminId: req.user._id,
+        },
+        req
       });
     } else if (req.user.role === 'member') {
       const populatedUser = await User.findById(req.user._id).populate({
@@ -610,8 +711,11 @@ exports.deleteRole = async (req, res, next) => {
       });
 
       if (!populatedUser) {
-        await logger.error('deleteRole: User not found', {
-          userId: req.user._id,
+        Logger.error("deleteRole", "User not found", {
+          context: {
+            userId: req.user._id,
+          },
+          req
         });
         return res.status(404).json({ message: 'User not found' });
       }
@@ -623,16 +727,22 @@ exports.deleteRole = async (req, res, next) => {
       );
 
       if (!hasPermission) {
-        await logger.warning('deleteRole: Missing permission role:delete', {
-          userId: req.user._id,
+        Logger.warn("deleteRole", "Missing permission role:delete", {
+          context: {
+            userId: req.user._id,
+          },
+          req
         });
         return res
           .status(403)
           .json({ message: "Access denied: Permission 'role:delete' required" });
       }
     } else {
-      await logger.warning('deleteRole: Invalid role access attempt', {
-        userRole: req.user.role,
+      Logger.warn("deleteRole", "Invalid role access attempt", {
+        context: {
+          userRole: req.user.role,
+        },
+        req
       });
       return res.status(403).json({
         message:
@@ -643,7 +753,12 @@ exports.deleteRole = async (req, res, next) => {
     // --- Find Role ---
     const role = await CustomRole.findById(roleId).populate('tenant');
     if (!role) {
-      await logger.warning('deleteRole: Role not found', { roleId });
+      Logger.warn("deleteRole", "Role not found", {
+        context: {
+          roleId,
+        },
+        req
+      });
       return res.status(404).json({ message: 'Role not found' });
     }
 
@@ -654,9 +769,12 @@ exports.deleteRole = async (req, res, next) => {
       role.tenant._id &&
       role.tenant._id.toString() !== req.tenantId
     ) {
-      await logger.warning('deleteRole: Cross-tenant deletion attempt', {
-        requestTenant: req.tenantId,
-        roleTenant: role.tenant._id,
+      Logger.warn("deleteRole", "Cross-tenant deletion attempt", {
+        context: {
+          requestTenant: req.tenantId,
+          roleTenant: role.tenant._id,
+        },
+        req
       });
       return res
         .status(403)
@@ -668,23 +786,32 @@ exports.deleteRole = async (req, res, next) => {
       { customRoles: roleId },
       { $pull: { customRoles: roleId } }
     );
-    await logger.info('deleteRole: Role removed from users', {
-      roleId,
-      affectedUsers: updatedUsers.modifiedCount,
+    Logger.info("deleteRole", "Role removed from users", {
+      context: {
+        roleId,
+        affectedUsers: updatedUsers.modifiedCount,
+      },
+      req
     });
 
     // --- Delete role ---
     await CustomRole.findByIdAndDelete(roleId);
-    await logger.info('deleteRole: Role deleted successfully', {
-      roleId,
-      deletedBy: req.user._id,
+    Logger.info("deleteRole", "Role deleted successfully", {
+      context: {
+        roleId,
+        deletedBy: req.user._id,
+      },
+      req
     });
 
     return res.status(200).json({ message: 'Role deleted successfully' });
   } catch (err) {
-    await logger.error('deleteRole: Error', {
-      error: err.message,
-      stack: err.stack,
+    Logger.error("deleteRole", "Error while deleting role", {
+      error,
+      context: {
+        roleId,
+      },
+      req
     });
     next(err);
   }
@@ -696,24 +823,33 @@ exports.getUsersByRole = async (req, res, next) => {
     // --- Validate Params ---
     const { error } = getUsersByRoleSchema.validate(req.params);
     if (error) {
-      await logger.warning("getUsersByRole: Validation failed", {
-        details: error.details[0],
-        performedBy: req.user?._id,
+      Logger.warn("getUsersByRole: Validation failed", {
+        context: {
+          details: error.details[0],
+          performedBy: req.user?._id,
+        },
+        req
       });
       return res.status(400).json({ message: error.details[0].message });
     }
 
     const { roleId } = req.params;
-    await logger.info("getUsersByRole: Start fetching users by role", {
-      roleId,
-      performedBy: req.user._id,
-      tenantId: req.tenantId,
+    Logger.info("getUsersByRole: Start fetching users by role", {
+      context: {
+        roleId,
+        performedBy: req.user._id,
+        tenantId: req.tenantId,
+      },
+      req
     });
 
     // --- Role-based restrictions ---
     if (req.user.role === "companyAdmin") {
-      await logger.info("getUsersByRole: Access granted to companyAdmin", {
-        userId: req.user._id,
+      Logger.info("getUsersByRole: Access granted to companyAdmin", {
+        context: {
+          userId: req.user._id,
+        },
+        req
       });
     } else if (req.user.role === "member") {
       const populatedUser = await User.findById(req.user._id).populate({
@@ -722,8 +858,11 @@ exports.getUsersByRole = async (req, res, next) => {
       });
 
       if (!populatedUser) {
-        await logger.error("getUsersByRole: User not found", {
-          userId: req.user._id,
+        Logger.error("getUsersByRole: User not found", {
+          context: {
+            userId: req.user._id,
+          },
+          req
         });
         return res.status(404).json({ message: "User not found" });
       }
@@ -735,21 +874,30 @@ exports.getUsersByRole = async (req, res, next) => {
       );
 
       if (!hasPermission) {
-        await logger.warning("getUsersByRole: Missing permission 'role:read'", {
-          userId: req.user._id,
+        Logger.warn("getUsersByRole: Missing permission 'role:read'", {
+          context: {
+            userId: req.user._id,
+          },
+          req
         });
         return res
           .status(403)
           .json({ message: "Access denied: Permission 'role:read' required" });
       }
 
-      await logger.info("getUsersByRole: Member permission verified", {
-        userId: req.user._id,
+      Logger.info("getUsersByRole: Member permission verified", {
+        context: {
+          userId: req.user._id,
+        },
+        req
       });
     } else {
-      await logger.warning("getUsersByRole: Unauthorized role access attempt", {
-        userRole: req.user.role,
-        userId: req.user._id,
+      Logger.warn("getUsersByRole: Unauthorized role access attempt", {
+        context: {
+          userRole: req.user.role,
+          userId: req.user._id,
+        },
+        req
       });
       return res.status(403).json({
         message:
@@ -764,7 +912,7 @@ exports.getUsersByRole = async (req, res, next) => {
     );
 
     if (!role) {
-      await logger.warning("getUsersByRole: Role not found", { roleId });
+      Logger.warn("getUsersByRole: Role not found", { context: { roleId }, req });
       return res.status(404).json({ message: "Role not found" });
     }
 
@@ -775,10 +923,13 @@ exports.getUsersByRole = async (req, res, next) => {
       role.tenant._id &&
       role.tenant._id.toString() !== req.tenantId
     ) {
-      await logger.warning("getUsersByRole: Cross-tenant access attempt", {
-        requestTenant: req.tenantId,
-        roleTenant: role.tenant._id,
-        performedBy: req.user._id,
+      Logger.warn("getUsersByRole: Cross-tenant access attempt", {
+        context: {
+          requestTenant: req.tenantId,
+          roleTenant: role.tenant._id,
+          performedBy: req.user._id,
+        },
+        req
       });
       return res
         .status(403)
@@ -786,21 +937,26 @@ exports.getUsersByRole = async (req, res, next) => {
     }
 
     // --- Success ---
-    await logger.info("getUsersByRole: Users retrieved successfully", {
-      roleId,
-      totalUsers: role.users?.length || 0,
-      requestedBy: req.user._id,
+    Logger.info("getUsersByRole", "Users retrieved successfully", {
+      context: {
+        roleId,
+        totalUsers: role.users?.length || 0,
+        requestedBy: req.user._id,
+      },
+      req
     });
 
     return res
       .status(200)
       .json({ message: "Users retrieved successfully", users: role.users || [] });
   } catch (err) {
-    await logger.error("getUsersByRole: Error occurred", {
-      error: err.message,
-      stack: err.stack,
-      performedBy: req.user?._id,
-      tenantId: req.tenantId,
+    Logger.error("getUsersByRole", "Error occurred", {
+      error,
+      context: {
+        performedBy: req.user?._id,
+        tenantId: req.tenantId,
+      },
+      req
     });
     next(err);
   }

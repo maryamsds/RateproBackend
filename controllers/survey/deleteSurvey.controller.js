@@ -21,18 +21,22 @@ module.exports = async function deleteSurvey(req, res, next) {
 
     await survey.save();
 
-    await Logger.info("survey_delete", "Survey deleted (soft)", {
-      surveyId,
-      tenant: req.user.tenant,
-      deletedBy: req.user._id,
+    Logger.info("survey_delete", "Survey soft-deleted", {
+      context: {
+        surveyId,
+        tenantId: req.user.tenant,
+        deletedBy: req.user._id
+      },
+      req
     });
 
     res.json({ message: "Survey deleted" });
 
   } catch (err) {
-    await Logger.error("survey_delete_error", "Survey delete failed", {
-      error: err.message,
-      stack: err.stack,
+    Logger.error("survey_delete", "Survey delete failed", {
+      error: err,
+      context: { tenantId: req.user.tenant },
+      req
     });
     next(err);
   }

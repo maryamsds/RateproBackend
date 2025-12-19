@@ -4,7 +4,7 @@ const WhatsAppSetting = require('../models/WhatsAppSetting');
 const sendWhatsApp = require('../utils/sendWhatsApp');
 const Joi = require('joi');
 const Tenant = require('../models/Tenant');
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 
 const sendSchema = Joi.object({
   surveyId: Joi.string().hex().length(24).required(),
@@ -57,11 +57,24 @@ exports.sendSurveyWhatsApp = async (req, res, next) => {
       }
     }
 
-    await Logger.info('sendSurveyWhatsApp', 'Survey WhatsApp messages attempted', { tenantId: req.tenantId, surveyId, recipients: toList.length });
+    Logger.info("sendSurveyWhatsApp", "Survey WhatsApp messages attempted", {
+      context: {
+        tenantId: req.tenantId,
+        surveyId,
+        recipients: toList.length
+      },
+      req
+    });
     res.status(200).json({ message: 'Send attempted', results });
   } catch (err) {
     console.error('sendSurveyWhatsApp error:', err);
-    await Logger.error('sendSurveyWhatsApp', 'Failed to send survey WhatsApp', { tenantId: req.tenantId, message: err.message, stack: err.stack });
+    Logger.error("sendSurveyWhatsApp", "Failed to send survey WhatsApp", {
+      error: err,
+      context: {
+        tenantId: req.tenantId
+      },
+      req
+    });
     next(err);
   }
 };
@@ -78,14 +91,25 @@ exports.sendSurveyWhatsApp = async (req, res, next) => {
 exports.whatsappWebhook = async (req, res) => {
   try {
     console.log('WhatsApp webhook received:', JSON.stringify(req.body).slice(0, 2000));
-    await Logger.info('whatsappWebhook', 'Received WhatsApp webhook', { body: req.body });
+    Logger.info("whatsappWebhook", "Received WhatsApp webhook", {
+      context: {
+        body: req.body
+      },
+      req
+    });
 
     // TODO: provider-specific parsing and status update
 
     res.status(200).send('OK');
   } catch (err) {
     console.error('WhatsApp webhook error:', err);
-    await Logger.error('whatsappWebhook', 'Error handling WhatsApp webhook', { message: err.message, stack: err.stack });
+    Logger.error("whatsappWebhook", "Error handling WhatsApp webhook", {
+      error: err,
+      context: {
+        body: req.body
+      },
+      req
+    });
     res.status(500).send('Error');
   }
 };

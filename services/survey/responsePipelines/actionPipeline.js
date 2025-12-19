@@ -40,8 +40,11 @@ module.exports.start = async (responseId) => {
     metadata: { responseId }
   });
 
-  await Logger.info("Auto action created", {
-    responseId,
-    actionId: action._id
+  Logger.info("autoAction", "Auto action created", {
+    context: {
+      responseId,
+      actionId: action._id
+    },
+    req
   });
 };

@@ -5,7 +5,7 @@ const FeedbackAnalysis = require("../models/FeedbackAnalysis");
 const Action = require("../models/Action");
 const DashboardMetrics = require("../models/DashboardMetrics");
 const mongoose = require("mongoose");
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 
 // Executive: high level KPIs (satisfaction index, NPS, trends)
 exports.getExecutiveDashboard = async (req, res, next) => {
@@ -36,11 +36,23 @@ exports.getExecutiveDashboard = async (req, res, next) => {
       };
     }
 
-    await Logger.info('getExecutiveDashboard', 'Fetched executive dashboard metrics', { tenantId });
+    Logger.info("getExecutiveDashboard", "Fetched executive dashboard metrics", {
+      context: {
+        tenantId
+      },
+      req
+    });
+
     res.status(200).json({ metrics });
   } catch (err) {
     console.error('Executive dashboard error:', err);
-    await Logger.error('getExecutiveDashboard', 'Failed to fetch executive dashboard', { tenantId: req.tenantId, message: err.message, stack: err.stack });
+    Logger.error("getExecutiveDashboard", "Failed to fetch executive dashboard", {
+      error: err,
+      context: {
+        tenantId: req.tenantId
+      },
+      req
+    });
     next(err);
   }
 };
@@ -73,7 +85,12 @@ exports.getOperationalDashboard = async (req, res, next) => {
 
     const topComplaints = topComplaintCategories.map(c => ({ category: c._id, count: c.count }));
 
-    await Logger.info('getOperationalDashboard', 'Fetched operational dashboard metrics', { tenantId });
+    Logger.info("getOperationalDashboard", "Fetched operational dashboard metrics", {
+      context: {
+        tenantId
+      },
+      req
+    });
     res.status(200).json({
       recentNegativeFeedback,
       openActionsCount,
@@ -82,7 +99,13 @@ exports.getOperationalDashboard = async (req, res, next) => {
     });
   } catch (err) {
     console.error('Operational dashboard error:', err);
-    await Logger.error('getOperationalDashboard', 'Failed to fetch operational dashboard', { tenantId: req.tenantId, message: err.message, stack: err.stack });
+    Logger.error("getOperationalDashboard", "Failed to fetch operational dashboard", {
+      error: err,
+      context: {
+        tenantId: req.tenantId
+      },
+      req
+    });
     next(err);
   }
 };

@@ -9,7 +9,7 @@ const generateToken = require("../utils/generateToken");
 const cloudinary = require("../utils/cloudinary");
 const moment = require("moment");
 const getBaseURL = require("../utils/getBaseURL");
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 const EmailTemplate = require("../models/EmailTemplate");
 
 // Helper: Generate OTP Code
@@ -82,7 +82,13 @@ exports.registerUser = async (req, res, next) => {
     try {
         const { error } = registerSchema.validate(req.body);
         if (error) {
-            await Logger.error('registerUser', 'Validation failed', { details: error.details[0].message });
+            Logger.error('registerUser', 'Validation failed', {
+                error: error, // poora error object taake details access kar sakein agar zarurat pade
+                context: {
+                    validationMessage: error.details?.[0]?.message
+                },
+                req
+            });
             return res.status(400).json({ message: error.details[0].message });
         }
 
@@ -90,7 +96,12 @@ exports.registerUser = async (req, res, next) => {
 
         const userExists = await User.findOne({ email });
         if (userExists) {
-            await Logger.error('registerUser', 'Email already registered', { email });
+            Logger.error('registerUser', 'Email already registered', {
+                context: {
+                    email
+                },
+                req
+            });
             return res.status(400).json({ message: "Email already registered" });
         }
 
@@ -133,7 +144,7 @@ exports.registerUser = async (req, res, next) => {
                     }
                 });
 
-                await sendEmail({
+                sendEmail({
                     to: email,
                     subject: "Verify Your Email",
                     templateType: template.type,
@@ -141,7 +152,7 @@ exports.registerUser = async (req, res, next) => {
                 });
             } else {
                 // fallback simple email
-                await sendEmail({
+                sendEmail({
                     to: email,
                     subject: "Verify Your Email",
                     html: `<p>Hello ${name || "user"},</p><p>Click this link to verify: <a href="${verificationLink}">${verificationLink}</a></p><p>This link/code expires in ${process.env.OTP_EXPIRE_MINUTES} minute(s).</p>`
@@ -151,11 +162,19 @@ exports.registerUser = async (req, res, next) => {
             console.error("❌ Error sending verification email:", emailError);
         }
 
-        await Logger.info('registerUser', 'User registered successfully', { email });
+        Logger.info('registerUser', 'User registered successfully', {
+            context: {
+                email
+            },
+            req
+        });
         res.status(201).json({ message: "User registered. Verification link sent to email." });
     } catch (err) {
         console.error("Register user error:", err);
-        await Logger.error('registerUser', 'Server error', { message: err.message, stack: err.stack });
+        Logger.error('registerUser', 'Server error', {
+            error: err,
+            req
+        });
         next(err);
     }
 };
@@ -167,24 +186,46 @@ exports.verifyEmailLink = async (req, res, next) => {
 
         const { error } = verifyEmailSchema.validate({ code, email });
         if (error) {
-            await Logger.error('verifyEmailLink', 'Invalid query', { code, email });
-            return res.redirect(`${process.env.RATEPRO_URL}/login?message=invalid-otp`);
+            Logger.error('verifyEmailLink', 'Invalid query', {
+                context: {
+                    code,
+                    email
+                },
+                req
+            }); return res.redirect(`${process.env.RATEPRO_URL}/login?message=invalid-otp`);
         }
 
         const otp = await OTP.findOne({ email, code, purpose: "verify" });
         if (!otp) {
-            await Logger.error('verifyEmailLink', 'OTP not found', { code, email });
+            Logger.error('verifyEmailLink', 'OTP not found', {
+                context: {
+                    code,
+                    email
+                },
+                req
+            });
             return res.redirect(`${process.env.RATEPRO_URL}/login?message=invalid-otp`);
         }
 
         if (otp.expiresAt < new Date()) {
-            await Logger.error('verifyEmailLink', 'OTP expired', { code, email });
+            Logger.error('verifyEmailLink', 'OTP expired', {
+                context: {
+                    code,
+                    email
+                },
+                req
+            });
             return res.redirect(`${process.env.RATEPRO_URL}/login?message=otp-expired`);
         }
 
         const user = await User.findOneAndUpdate({ email }, { isVerified: true }, { new: true });
         if (!user) {
-            await Logger.error('verifyEmailLink', 'User not found', { email });
+            Logger.error('verifyEmailLink', 'User not found', {
+                context: {
+                    email
+                },
+                req
+            });
             return res.redirect(`${process.env.RATEPRO_URL}/login?message=user-not-found`);
         }
 
@@ -198,11 +239,19 @@ exports.verifyEmailLink = async (req, res, next) => {
         res.cookie("refreshToken", refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax", maxAge: 7 * 24 * 60 * 60 * 1000 });
         res.cookie("accessToken", accessToken, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax", maxAge: 1 * 60 * 60 * 1000 });
 
-        await Logger.info('verifyEmailLink', 'Email verified via link', { email });
+        Logger.info('verifyEmailLink', 'Email verified via link', {
+            context: {
+                email
+            },
+            req
+        });
         return res.redirect(`${baseURL}/app`);
     } catch (err) {
         console.error("Verify email link error:", err);
-        await Logger.error('verifyEmailLink', 'Server error', { message: err.message, stack: err.stack });
+        Logger.error('verifyEmailLink', 'Server error', {
+            error: err,
+            req
+        });
         return res.redirect(`${process.env.RATEPRO_URL}/login?message=error`);
     }
 };
@@ -212,7 +261,13 @@ exports.verifyEmail = async (req, res, next) => {
     try {
         const { error } = verifyEmailSchema.validate(req.body);
         if (error) {
-            await Logger.error('verifyEmail', 'Validation failed', { details: error.details[0].message });
+            Logger.error('verifyEmail', 'Validation failed', {
+                error: error,
+                context: {
+                    validationMessage: error.details?.[0]?.message
+                },
+                req
+            });
             return res.status(400).json({ message: error.details[0].message });
         }
 
@@ -220,23 +275,43 @@ exports.verifyEmail = async (req, res, next) => {
 
         const otp = await OTP.findOne({ email, code, purpose: "verify" });
         if (!otp) {
-            await Logger.error('verifyEmail', 'Invalid OTP', { email, code });
+            Logger.error('verifyEmail', 'Invalid OTP', {
+                context: {
+                    email,
+                    code
+                },
+                req
+            });
             return res.status(400).json({ message: "Invalid OTP" });
         }
 
         if (otp.expiresAt < new Date()) {
-            await Logger.error('verifyEmail', 'OTP expired', { email, code });
+            Logger.error('verifyEmail', 'OTP expired', {
+                context: {
+                    email,
+                    code
+                },
+                req
+            });
             return res.status(400).json({ message: "OTP expired. Request a new one." });
         }
 
         await User.findOneAndUpdate({ email }, { isVerified: true });
         await OTP.deleteMany({ email, purpose: "verify" });
 
-        await Logger.info('verifyEmail', 'Email verified successfully', { email });
+        Logger.info('verifyEmail', 'Email verified successfully', {
+            context: {
+                email
+            },
+            req
+        });
         res.status(200).json({ message: "Email verified successfully" });
     } catch (err) {
         console.error("Verify email error:", err);
-        await Logger.error('verifyEmail', 'Server error', { message: err.message, stack: err.stack });
+        Logger.error('verifyEmail', 'Server error', {
+            error: err,
+            req
+        });
         next(err);
     }
 };
@@ -245,14 +320,25 @@ exports.resendOtp = async (req, res, next) => {
     try {
         const { error } = resendOtpSchema.validate(req.body);
         if (error) {
-            await Logger.error('resendOtp', 'Validation failed', { details: error.details[0].message });
+            Logger.error('resendOtp', 'Validation failed', {
+                error: error,
+                context: {
+                    validationMessage: error.details?.[0]?.message
+                },
+                req
+            });
             return res.status(400).json({ message: error.details[0].message });
         }
 
         const { email, purpose } = req.body;
         const user = await User.findOne({ email });
         if (!user) {
-            await Logger.error('resendOtp', 'User not found', { email });
+            Logger.error('resendOtp', 'User not found', {
+                context: {
+                    email
+                },
+                req
+            });
             return res.status(404).json({ message: "User not found" });
         }
 
@@ -271,7 +357,7 @@ exports.resendOtp = async (req, res, next) => {
         //         : `<p>Your OTP Code: ${otpCode}</p>`,
         // };
 
-        // await sendEmail(emailContent);
+        // sendEmail(emailContent);
         const baseURL = ['admin', 'companyAdmin'].includes(user.role) ? process.env.FRONTEND_URL : process.env.RATEPRO_URL;
         const verificationLink = purpose === "verify" ? `${baseURL}/verify-email?code=${otpCode}&email=${email}` : null;
 
@@ -294,7 +380,7 @@ exports.resendOtp = async (req, res, next) => {
                     }
                 });
 
-                await sendEmail({
+                sendEmail({
                     to: email,
                     subject: templateData.notificationSubject,
                     templateType: template.type,
@@ -302,7 +388,7 @@ exports.resendOtp = async (req, res, next) => {
                 });
             } else {
                 // fallback simple email
-                await sendEmail({
+                sendEmail({
                     to: email,
                     subject: purpose === "verify" ? "Verify Your Email" : `OTP Code for ${purpose}`,
                     html: verificationLink
@@ -314,11 +400,20 @@ exports.resendOtp = async (req, res, next) => {
             console.error("❌ Error sending OTP email:", emailError);
         }
 
-        await Logger.info('resendOtp', 'OTP resent successfully', { email, purpose });
+        Logger.info('resendOtp', 'OTP resent successfully', {
+            context: {
+                email,
+                purpose
+            },
+            req
+        });
         res.status(200).json({ message: "OTP resent to email" });
     } catch (err) {
         console.error('Resend OTP error:', err);
-        await Logger.error('resendOtp', 'Server error', { message: err.message, stack: err.stack });
+        Logger.error('resendOtp', 'Server error', {
+            error: err,
+            req
+        });
         next(err);
     }
 };
@@ -393,7 +488,7 @@ exports.resendOtp = async (req, res, next) => {
 //                         }
 //                     });
 
-//                     await sendEmail({
+//                     sendEmail({
 //                         to: email,
 //                         subject: templateData.notificationSubject,
 //                         templateType: template.type,
@@ -401,7 +496,7 @@ exports.resendOtp = async (req, res, next) => {
 //                     });
 //                 } else {
 //                     // fallback simple email
-//                     await sendEmail({
+//                     sendEmail({
 //                         to: email,
 //                         subject: "Verify Your Email",
 //                         html: `<p>Hello ${user.name || "User"},</p>
@@ -462,21 +557,17 @@ exports.loginUser = async (req, res, next) => {
     // Redact password from logs
     const safeBodyForLog = { ...req.body };
     if (safeBodyForLog.password) safeBodyForLog.password = "[REDACTED]";
-    console.log("IP:", req.ip || req.headers['x-forwarded-for'] || "unknown");
-    console.log("Route params:", req.params);
-    console.log("Body (redacted):", safeBodyForLog);
-    console.log("Cookies:", req.cookies ? Object.keys(req.cookies) : "none");
-    console.log("Headers (subset):", {
-        host: req.headers.host,
-        referer: req.headers.referer,
-        "user-agent": req.headers["user-agent"]
-    });
-
     try {
         const { error } = loginSchema.validate(req.body);
         if (error) {
             console.log("\x1b[31m[DEBUG] loginUser - validation failed\x1b[0m", error.details[0].message);
-            await Logger.error('loginUser', 'Validation failed', { details: error.details[0].message });
+            Logger.error('loginUser', 'Validation failed', {
+                error: error,
+                context: {
+                    validationMessage: error.details?.[0]?.message
+                },
+                req
+            });
             return res.status(400).json({ message: error.details[0].message });
         }
 
@@ -500,7 +591,12 @@ exports.loginUser = async (req, res, next) => {
 
         if (!user) {
             console.log("\x1b[31m[DEBUG] loginUser - user not found\x1b[0m", email);
-            await Logger.error('loginUser', 'User not found', { email });
+            Logger.error('loginUser', 'User not found', {
+                context: {
+                    email
+                },
+                req
+            });
             return res.status(404).json({ message: "User not found" });
         }
 
@@ -509,12 +605,14 @@ exports.loginUser = async (req, res, next) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             console.log("\x1b[31m[DEBUG] loginUser - invalid password\x1b[0m", { userId: user._id.toString(), email: user.email });
-            await Logger.error('loginUser', 'Invalid password', { email });
+            Logger.error('loginUser', 'Invalid password', {
+                context: {
+                    email
+                },
+                req
+            });
             return res.status(401).json({ message: "Invalid password" });
         }
-
-        console.log("\x1b[32m[DEBUG] loginUser - password valid\x1b[0m", { userId: user._id.toString() });
-
         if (!user.isVerified) {
             console.log("\x1b[33m[DEBUG] loginUser - user not verified, creating OTP\x1b[0m", { email });
 
@@ -555,7 +653,7 @@ exports.loginUser = async (req, res, next) => {
                     });
 
                     console.log("\x1b[34m[DEBUG] loginUser - sending templated verification email\x1b[0m", { to: email, template: template.type });
-                    await sendEmail({
+                    sendEmail({
                         to: email,
                         subject: templateData.notificationSubject,
                         templateType: template.type,
@@ -564,7 +662,7 @@ exports.loginUser = async (req, res, next) => {
                     console.log("\x1b[32m[DEBUG] loginUser - templated email sent\x1b[0m", { to: email });
                 } else {
                     console.log("\x1b[33m[DEBUG] loginUser - template missing, sending fallback email\x1b[0m");
-                    await sendEmail({
+                    sendEmail({
                         to: email,
                         subject: "Verify Your Email",
                         html: `<p>Hello ${user.name || "User"},</p>
@@ -578,8 +676,12 @@ exports.loginUser = async (req, res, next) => {
                 console.error("❌ Error sending verification email:", emailError);
             }
 
-            await Logger.error('loginUser', 'Email not verified', { email });
-            console.log("\x1b[31m[DEBUG] loginUser - returning 401 email not verified\x1b[0m");
+            Logger.error('loginUser', 'Email not verified', {
+                context: {
+                    email
+                },
+                req
+            });
             return res.status(401).json({
                 message: "Email not verified. A verification link has been sent to your email.",
             });
@@ -654,13 +756,19 @@ exports.loginUser = async (req, res, next) => {
             lastLogin: user.lastLogin,
         };
 
-        await Logger.info('loginUser', 'User logged in successfully', { email });
-        console.log("\x1b[32m[DEBUG] loginUser - success response about to be sent\x1b[0m", { userId: user._id.toString() });
-
+        Logger.info('loginUser', 'User logged in successfully', {
+            context: {
+                email
+            },
+            req
+        });
         res.status(200).json({ accessToken, user: safeUser });
     } catch (err) {
         console.error('Login error:', err);
-        await Logger.error('loginUser', 'Server error', { message: err.message, stack: err.stack });
+        Logger.error('loginUser', 'Server error', {
+            error: err,
+            req
+        });
         next(err);
     }
 };
@@ -671,7 +779,13 @@ exports.forgotPassword = async (req, res, next) => {
     try {
         const { error } = forgotPasswordSchema.validate(req.body);
         if (error) {
-            await Logger.error('forgotPassword', 'Validation failed', { details: error.details[0].message });
+            Logger.error('forgotPassword', 'Validation failed', {
+                error: error,
+                context: {
+                    validationMessage: error.details?.[0]?.message
+                },
+                req
+            });
             return res.status(400).json({ message: error.details[0].message });
         }
 
@@ -679,7 +793,12 @@ exports.forgotPassword = async (req, res, next) => {
         const user = await User.findOne({ email });
 
         if (!user) {
-            await Logger.error('forgotPassword', 'User not found', { email });
+            Logger.error('forgotPassword', 'User not found', {
+                context: {
+                    email
+                },
+                req
+            });
             return res.status(404).json({ message: "No user with this email" });
         }
 
@@ -689,7 +808,7 @@ exports.forgotPassword = async (req, res, next) => {
         await OTP.deleteMany({ email, purpose: "reset" });
         await OTP.create({ email, code: otpCode, expiresAt, purpose: "reset" });
 
-        // await sendEmail({
+        // sendEmail({
         //     to: email,
         //     subject: "Reset Password OTP",
         //     html: `<p>Your OTP Code to reset password: <b>${otpCode}</b></p>`,
@@ -716,7 +835,7 @@ exports.forgotPassword = async (req, res, next) => {
                     }
                 });
 
-                await sendEmail({
+                sendEmail({
                     to: email,
                     subject: templateData.notificationSubject,
                     templateType: template.type,
@@ -724,7 +843,7 @@ exports.forgotPassword = async (req, res, next) => {
                 });
             } else {
                 // fallback simple email
-                await sendEmail({
+                sendEmail({
                     to: email,
                     subject: "Reset Password OTP",
                     html: `<p>Hello ${user.name || "User"},</p>
@@ -736,11 +855,19 @@ exports.forgotPassword = async (req, res, next) => {
             console.error("❌ Error sending OTP email:", emailError);
         }
 
-        await Logger.info('forgotPassword', 'OTP sent successfully', { email });
+        Logger.info('forgotPassword', 'OTP sent successfully', {
+            context: {
+                email
+            },
+            req
+        });
         res.status(200).json({ message: "OTP sent for password reset" });
     } catch (err) {
         console.error("Forgot password error:", err);
-        await Logger.error('forgotPassword', 'Server error', { message: err.message, stack: err.stack });
+        Logger.error('forgotPassword', 'Server error', {
+            error: err,
+            req
+        });
         next(err);
     }
 };
@@ -750,7 +877,13 @@ exports.verifyResetCode = async (req, res, next) => {
     try {
         const { error } = verifyResetCodeSchema.validate(req.body, { allowUnknown: true });
         if (error) {
-            await Logger.error('verifyResetCode', 'Validation failed', { details: error.details[0].message });
+            Logger.error('verifyResetCode', 'Validation failed', {
+                error: error,
+                context: {
+                    validationMessage: error.details?.[0]?.message
+                },
+                req
+            });
             return res.status(400).json({ message: error.details[0].message });
         }
 
@@ -764,15 +897,28 @@ exports.verifyResetCode = async (req, res, next) => {
         });
 
         if (!otpRecord) {
-            await Logger.error('verifyResetCode', 'Invalid or expired OTP', { email });
+            Logger.error('verifyResetCode', 'Invalid or expired OTP', {
+                context: {
+                    email
+                },
+                req
+            });
             return res.status(400).json({ message: "Invalid or expired code" });
         }
 
-        await Logger.info('verifyResetCode', 'OTP verified successfully', { email });
+        Logger.info('verifyResetCode', 'OTP verified successfully', {
+            context: {
+                email
+            },
+            req
+        });
         res.status(200).json({ message: "OTP verified. You can reset your password now." });
     } catch (err) {
         console.error("Verify reset code error:", err);
-        await Logger.error('verifyResetCode', 'Server error', { message: err.message, stack: err.stack });
+        Logger.error('verifyResetCode', 'Server error', {
+            error: err,
+            req
+        });
         res.status(500).json({ message: "Server error" });
     }
 };
@@ -782,7 +928,13 @@ exports.resetPassword = async (req, res, next) => {
     try {
         const { error } = resetPasswordSchema.validate(req.body);
         if (error) {
-            await Logger.error('resetPassword', 'Validation failed', { details: error.details[0].message });
+            Logger.error('resetPassword', 'Validation failed', {
+                error: error,
+                context: {
+                    validationMessage: error.details?.[0]?.message
+                },
+                req
+            });
             return res.status(400).json({ message: error.details[0].message });
         }
 
@@ -790,12 +942,22 @@ exports.resetPassword = async (req, res, next) => {
 
         const otp = await OTP.findOne({ email, code, purpose: "reset" });
         if (!otp) {
-            await Logger.error('resetPassword', 'Invalid OTP', { email });
+            Logger.error('resetPassword', 'Invalid OTP', {
+                context: {
+                    email
+                },
+                req
+            });
             return res.status(400).json({ message: "Invalid OTP" });
         }
 
         if (otp.expiresAt < new Date()) {
-            await Logger.error('resetPassword', 'OTP expired', { email });
+            Logger.error('resetPassword', 'OTP expired', {
+                context: {
+                    email
+                },
+                req
+            });
             return res.status(400).json({ message: "OTP expired" });
         }
 
@@ -803,11 +965,19 @@ exports.resetPassword = async (req, res, next) => {
         await User.findOneAndUpdate({ email }, { password: hashed });
         await OTP.deleteMany({ email, purpose: "reset" });
 
-        await Logger.info('resetPassword', 'Password reset successful', { email });
+        Logger.info('resetPassword', 'Password reset successful', {
+            context: {
+                email
+            },
+            req
+        });
         res.status(200).json({ message: "Password reset successful" });
     } catch (err) {
         console.error("Reset password error:", err);
-        await Logger.error('resetPassword', 'Server error', { message: err.message, stack: err.stack });
+        Logger.error('resetPassword', 'Server error', {
+            error: err,
+            req
+        });
         next(err);
     }
 };
@@ -817,13 +987,23 @@ exports.updateProfile = async (req, res, next) => {
     try {
         const { error } = updateProfileSchema.validate(req.body);
         if (error) {
-            await Logger.error('updateProfile', 'Validation failed', { userId: req.user._id, details: error.details[0].message });
+            Logger.error('updateProfile', 'Validation failed', {
+                context: {
+                    userId: req.user._id,
+                    validationMessage: error.details[0].message
+                },
+                error,
+                req
+            });
             return res.status(400).json({ message: error.details[0].message });
         }
 
         const user = await User.findById(req.user._id);
         if (!user) {
-            await Logger.error('updateProfile', 'User not found', { userId: req.user._id });
+            Logger.error('updateProfile', 'User not found', {
+                context: { userId: req.user._id },
+                req
+            });
             return res.status(404).json({ message: "User not found" });
         }
 
@@ -843,7 +1023,10 @@ exports.updateProfile = async (req, res, next) => {
         if (currentPassword && newPassword) {
             const match = await bcrypt.compare(currentPassword, user.password);
             if (!match) {
-                await Logger.error('updateProfile', 'Current password incorrect', { userId: req.user._id });
+                Logger.error('updateProfile', 'Current password incorrect', {
+                    context: { userId: req.user._id },
+                    req
+                });
                 return res.status(400).json({ message: "Current password incorrect" });
             }
             user.password = await bcrypt.hash(newPassword, 12);
@@ -857,12 +1040,19 @@ exports.updateProfile = async (req, res, next) => {
         }
 
         await user.save();
-        await Logger.info('updateProfile', 'Profile updated successfully', { userId: req.user._id });
+        Logger.info('updateProfile', 'Profile updated successfully', {
+            context: { userId: req.user._id },
+            req
+        });
 
         res.status(200).json({ message: "Profile updated", user });
     } catch (err) {
         console.error("Update profile error:", err);
-        await Logger.error('updateProfile', 'Server error', { userId: req.user._id, message: err.message, stack: err.stack });
+        Logger.error('updateProfile', 'Server error during profile update', {
+            context: { userId: req.user._id },
+            error: err,
+            req
+        });
         next(err);
     }
 };
@@ -886,21 +1076,25 @@ exports.getMe = async (req, res, next) => {
 
         if (!user) {
             // ❌ Log error: user not found
-            await Logger.error('getMe', 'User not found', { userId });
+            Logger.error('getMe', 'User not found', {
+                context: { userId }
+            });
             return res.status(404).json({ message: 'User not found' });
         }
 
         // ✅ Log success
-        await Logger.info('getMe', 'User fetched successfully', { userId });
+        Logger.info('getMe', 'User fetched successfully', {
+            context: { userId }
+        });
 
         return res.status(200).json({ success: true, user });
     } catch (err) {
         // ❌ Log error
         console.error('getMe error:', { message: err.message, stack: err.stack });
-        await Logger.error('getMe', 'Server error fetching user', {
-            message: err.message,
-            stack: err.stack,
-            userId: req.user?._id,
+        Logger.error('getMe', 'Server error fetching user', {
+            context: { userId: req.user?._id },
+            error: err,
+            req
         });
 
         return res.status(500).json({ message: 'Server error' });
@@ -920,19 +1114,22 @@ exports.logoutUser = async (req, res) => {
         res.clearCookie("refreshToken", cookieOptions);
 
         // ✅ Log successful logout
-        await Logger.info("logoutUser", "User logged out successfully", {
-            userId: req.user?._id,
-            email: req.user?.email,
+        Logger.info('logoutUser', 'User logged out successfully', {
+            context: {
+                userId: req.user?._id,
+                email: req.user?.email
+            },
+            req
         });
 
         res.status(200).json({ message: "Logged out" });
     } catch (err) {
         // ❌ Log error
         console.error("logoutUser error:", err);
-        await Logger.error("logoutUser", "Error during user logout", {
-            message: err.message,
-            stack: err.stack,
-            userId: req.user?._id,
+        Logger.error('logoutUser', 'Error during user logout', {
+            context: { userId: req.user?._id },
+            error: err,
+            req
         });
 
         res.status(500).json({ message: "Logout failed", error: err.message });
@@ -972,9 +1169,12 @@ exports.refreshAccessToken = async (req, res) => {
         };
 
         // ✅ Log success
-        await Logger.info("refreshAccessToken", "Access token refreshed successfully", {
-            userId: user._id,
-            email: user.email,
+        Logger.info('refreshAccessToken', 'Access token refreshed successfully', {
+            context: {
+                userId: user._id,
+                email: user.email
+            }
+            // req nahi hai yahan, to nahi daal rahe
         });
 
         return res.status(200).json(responseData);
@@ -982,9 +1182,9 @@ exports.refreshAccessToken = async (req, res) => {
         console.error("refreshAccessToken error:", err);
 
         // ❌ Log error
-        await Logger.error("refreshAccessToken", "Error refreshing access token", {
-            message: err.message,
-            stack: err.stack,
+        Logger.error('refreshAccessToken', 'Error refreshing access token', {
+            error: err
+            // req ya user context nahi hai yahan, to sirf error
         });
 
         return res.status(401).json({ message: "Invalid refresh token" });

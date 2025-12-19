@@ -18,9 +18,9 @@ exports.toggleSurveyStatus = async (req, res, next) => {
       status: survey.status,
     });
   } catch (err) {
-    await Logger.error("toggleSurveyStatus: error", {
-      error: err.message,
-      stack: err.stack,
+    Logger.error("toggleSurveyStatus", "Error toggling survey status", {
+      error: err,
+      req
     });
     next(err);
   }

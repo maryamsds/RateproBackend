@@ -9,7 +9,7 @@ const sendEmail = require("../utils/sendEmail");
 const sendSMS = require("../utils/sendSMS"); // optional helper to implement
 const Joi = require("joi");
 const { generateActionsFromFeedback } = require("./actionController")
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 
 // analyzeFeedback: analyze one or multiple responses (can be called on-demand or from webhook)
 const analyzeSchema = Joi.object({
@@ -89,21 +89,27 @@ exports.analyzeFeedbackLogic = async (options, tenantId) => {
     }
 
     // ✅ Log success only after all analyses done
-    await Logger.info('analyzeFeedbackLogic', 'Feedback analysis logic executed successfully', {
-      tenantId,
-      totalResponses: responses.length,
-      totalAnalyzed: analyses.filter(a => a.status === "analyzed").length,
-      totalSkipped: analyses.filter(a => a.status === "skipped").length
+    Logger.info("analyzeFeedbackLogic", "Feedback analysis logic executed successfully", {
+      context: {
+        tenantId,
+        totalResponses: responses.length,
+        totalAnalyzed: analyses.filter(a => a.status === "analyzed").length,
+        totalSkipped: analyses.filter(a => a.status === "skipped").length
+      },
+      req
     });
+
 
     return analyses;
 
   } catch (err) {
     console.error("💥 Error in analyzeFeedbackLogic:", err.message);
-    await Logger.error('analyzeFeedbackLogic', 'Error during feedback analysis', {
-      tenantId,
-      message: err.message,
-      stack: err.stack
+    Logger.error("analyzeFeedbackLogic", "Error during feedback analysis", {
+      error: err,
+      context: {
+        tenantId
+      },
+      req
     });
     throw err;
   }
@@ -124,16 +130,25 @@ exports.analyzeFeedback = async (req, res) => {
   try {
     const { error, value } = analyzeSchema.validate(req.body);
     if (error) {
-      await Logger.error('analyzeFeedback', 'Validation failed', { message: error.details[0].message });
+      Logger.error("analyzeFeedback", "Validation failed", {
+        error,
+        context: {},
+        req
+      });
+
       return res.status(400).json({ success: false, message: error.details[0].message });
     }
 
     const analyses = await exports.analyzeFeedbackLogic(value, req.tenantId);
 
-    await Logger.info('analyzeFeedback', 'Feedback analysis completed successfully', {
-      tenantId: req.tenantId,
-      analysisCount: analyses?.length || 0,
+    Logger.info("analyzeFeedback", "Feedback analysis completed successfully", {
+      context: {
+        tenantId: req.tenantId,
+        analysisCount: analyses?.length || 0
+      },
+      req
     });
+
 
     res.status(200).json({
       success: true,
@@ -142,10 +157,12 @@ exports.analyzeFeedback = async (req, res) => {
     });
   } catch (error) {
     console.error('analyzeFeedback error:', error);
-    await Logger.error('analyzeFeedback', 'Failed to analyze feedback', {
-      message: error.message,
-      stack: error.stack,
-      tenantId: req.tenantId,
+    Logger.error("analyzeFeedback", "Failed to analyze feedback", {
+      error,
+      context: {
+        tenantId: req.tenantId
+      },
+      req
     });
     res.status(500).json({
       success: false,
@@ -164,7 +181,12 @@ exports.generateActions = async (req, res) => {
   try {
     const { error, value } = generateSchema.validate(req.body);
     if (error) {
-      await Logger.error('generateActions', 'Validation failed', { message: error.details[0].message });
+      Logger.error("generateActions", "Validation failed", {
+        error,
+        context: {},
+        req
+      });
+
       return res.status(400).json({ success: false, message: error.details[0].message });
     }
 
@@ -194,10 +216,14 @@ exports.generateActions = async (req, res) => {
       created.push(action);
     }
 
-    await Logger.info('generateActions', 'Actions generated successfully', {
-      tenantId: req.tenantId,
-      count: created.length,
+    Logger.info("generateActions", "Actions generated successfully", {
+      context: {
+        tenantId: req.tenantId,
+        count: created.length
+      },
+      req
     });
+
 
     res.status(201).json({
       success: true,
@@ -206,10 +232,12 @@ exports.generateActions = async (req, res) => {
     });
   } catch (error) {
     console.error('generateActions error:', error);
-    await Logger.error('generateActions', 'Failed to generate actions', {
-      message: error.message,
-      stack: error.stack,
-      tenantId: req.tenantId,
+    Logger.error("generateActions", "Failed to generate actions", {
+      error,
+      context: {
+        tenantId: req.tenantId
+      },
+      req
     });
     res.status(500).json({
       success: false,
@@ -259,7 +287,7 @@ const followUpSchema = Joi.object({
 //       const sent = { actionId: action._id, email: null, sms: null };
 
 //       if ((method === "email" || method === "both") && toEmail) {
-//         await sendEmail({
+//         sendEmail({
 //           to: toEmail,
 //           subject: "Follow-up on Feedback",
 //           html: `<p>${message}</p>`
@@ -364,7 +392,7 @@ exports.followUp = async (req, res) => {
               }
             });
 
-            await sendEmail({
+            sendEmail({
               to: toEmail,
               subject: "Follow-up on Feedback",
               templateType: template.type,
@@ -372,7 +400,7 @@ exports.followUp = async (req, res) => {
             });
           } else {
             // fallback simple email
-            await sendEmail({
+            sendEmail({
               to: toEmail,
               subject: "Follow-up on Feedback",
               html: `<p>${message}</p>`
@@ -399,11 +427,14 @@ exports.followUp = async (req, res) => {
     }
 
     // ✅ Success log
-    await Logger.info('followUp', 'Follow-up actions processed successfully', {
-      triggeredBy: user?.email,
-      method,
-      totalActions: actionIds.length,
-      successCount: results.length
+    Logger.info("followUp", "Follow-up actions processed successfully", {
+      context: {
+        triggeredBy: user?.email,
+        method,
+        totalActions: actionIds.length,
+        successCount: results.length
+      },
+      req
     });
 
     res.status(200).json({
@@ -415,10 +446,12 @@ exports.followUp = async (req, res) => {
   } catch (error) {
     console.error("❌ followUp error:", error);
 
-    await Logger.error('followUp', 'Failed to process follow-up actions', {
-      message: error.message,
-      stack: error.stack
+    Logger.error("followUp", "Failed to process follow-up actions", {
+      error,
+      context: {},
+      req
     });
+
 
     res.status(500).json({
       success: false,

@@ -8,12 +8,12 @@ exports.listSurveys = async (req, res, next) => {
       query: req.query,
       user: req.user,
     });
-
+    
     res.status(200).json(result);
   } catch (err) {
-    await Logger.error("listSurveys: error", {
-      error: err.message,
-      stack: err.stack,
+    Logger.error("listSurveys", "Error listing surveys", {
+      error: err,
+      req
     });
     next(err);
   }

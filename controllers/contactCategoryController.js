@@ -120,7 +120,7 @@
 // controllers/ContactCategoryController.js
 const ContactCategory = require('../models/ContactCategory');
 const Joi = require('joi');
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 
 // Joi Validation Schemas
 const createSchema = Joi.object({
@@ -140,18 +140,36 @@ const updateSchema = Joi.object({
 exports.createCategory = async (req, res) => {
     try {
         if (!req.user || !req.tenantId) {
-            await Logger.warning('createCategory: Invalid request context', { userId: req.user?._id, tenantId: req.tenantId });
+            Logger.warn("createCategory", "Invalid request context", {
+                context: {
+                    userId: req.user?._id,
+                    tenantId: req.tenantId
+                },
+                req
+            });
             return res.status(400).json({ message: "Invalid request context" });
         }
 
         const { error, value } = createSchema.validate(req.body);
         if (error) {
-            await Logger.warning('createCategory: Validation failed', { errors: error.details, userId: req.user._id });
+            Logger.warn("createCategory", "Validation failed", {
+                context: {
+                    errors: error.details,
+                    userId: req.user._id
+                },
+                req
+            });
             return res.status(400).json({ message: error.details[0].message });
         }
 
         if (!['admin', 'companyAdmin'].includes(req.user.role)) {
-            await Logger.warning('createCategory: Access denied', { userId: req.user._id, role: req.user.role });
+            Logger.warn("createCategory", "Access denied", {
+                context: {
+                    userId: req.user._id,
+                    role: req.user.role
+                },
+                req
+            });
             return res.status(403).json({ message: 'Access denied' });
         }
 
@@ -160,7 +178,13 @@ exports.createCategory = async (req, res) => {
             name: value.name,
         });
         if (exists) {
-            await Logger.info('createCategory: Category already exists', { tenantId: req.tenantId, name: value.name });
+            Logger.info("createCategory", "Category already exists", {
+                context: {
+                    tenantId: req.tenantId,
+                    name: value.name
+                },
+                req
+            });
             return res.status(400).json({ message: 'Category already exists in this company' });
         }
 
@@ -170,11 +194,26 @@ exports.createCategory = async (req, res) => {
             createdBy: req.user._id,
         });
 
-        await Logger.info('createCategory: Category created successfully', { categoryId: category._id, tenantId: req.tenantId, createdBy: req.user._id });
+        Logger.info("createCategory", "Category created successfully", {
+            context: {
+                categoryId: category._id,
+                tenantId: req.tenantId,
+                createdBy: req.user._id
+            },
+            req
+        });
 
         res.status(201).json({ success: true, data: { category } });
     } catch (err) {
-        await Logger.error('createCategory: Server error', { message: err.message, stack: err.stack, userId: req.user?._id, tenantId: req.tenantId });
+        Logger.error("createCategory", "Server error", {
+            error: err,
+            context: {
+                userId: req.user?._id,
+                tenantId: req.tenantId
+            },
+            req
+        });
+
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 };
@@ -194,11 +233,23 @@ exports.getCategories = async (req, res) => {
             .select("name type active isDefault createdAt")
             .sort({ isDefault: -1, name: 1 }); // show defaults first
 
-        await Logger.info('getCategories: Fetched categories', { tenantId: req.tenantId, count: categories.length });
+        Logger.info("getCategories", "Fetched categories", {
+            context: {
+                tenantId: req.tenantId,
+                count: categories.length
+            },
+            req
+        });
 
         res.json({ success: true, count: categories.length, data: { categories } });
     } catch (err) {
-        await Logger.error('getCategories: Server error', { message: err.message, stack: err.stack, tenantId: req.tenantId });
+        Logger.error("getCategories", "Server error", {
+            error: err,
+            context: {
+                tenantId: req.tenantId
+            },
+            req
+        });
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 };
@@ -208,23 +259,46 @@ exports.updateCategory = async (req, res) => {
     try {
         const { error, value } = updateSchema.validate(req.body);
         if (error) {
-            await Logger.warning('updateCategory: Validation failed', { errors: error.details, tenantId: req.tenantId });
+            Logger.warn("updateCategory", "Validation failed", {
+                context: {
+                    errors: error.details,
+                    tenantId: req.tenantId
+                },
+                req
+            });
             return res.status(400).json({ message: error.details[0].message });
         }
 
         if (!["admin", "companyAdmin"].includes(req.user.role)) {
-            await Logger.warning('updateCategory: Access denied', { userId: req.user._id, role: req.user.role });
+            Logger.warn("updateCategory", "Access denied", {
+                context: {
+                    userId: req.user._id,
+                    role: req.user.role
+                },
+                req
+            });
             return res.status(403).json({ message: "Access denied" });
         }
 
         // 🔒 Prevent editing default categories
         const target = await ContactCategory.findById(req.params.id);
         if (!target) {
-            await Logger.warning('updateCategory: Category not found', { categoryId: req.params.id });
+            Logger.warn("updateCategory", "Category not found", {
+                context: {
+                    categoryId: req.params.id
+                },
+                req
+            });
+
             return res.status(404).json({ message: "Category not found" });
         }
         if (target.isDefault) {
-            await Logger.info('updateCategory: Attempt to modify default category', { categoryId: req.params.id });
+            Logger.info("updateCategory", "Attempt to modify default category", {
+                context: {
+                    categoryId: req.params.id
+                },
+                req
+            });
             return res.status(400).json({ message: "Default categories cannot be modified" });
         }
 
@@ -235,11 +309,23 @@ exports.updateCategory = async (req, res) => {
             { new: true, runValidators: true }
         );
 
-        await Logger.info('updateCategory: Category updated successfully', { categoryId: category._id, tenantId: req.tenantId });
+        Logger.info("updateCategory", "Category updated successfully", {
+            context: {
+                categoryId: category._id,
+                tenantId: req.tenantId
+            },
+            req
+        });
 
         res.json({ success: true, data: { category } });
     } catch (err) {
-        await Logger.error('updateCategory: Server error', { message: err.message, stack: err.stack, tenantId: req.tenantId });
+        Logger.error("updateCategory", "Server error", {
+            error: err,
+            context: {
+                tenantId: req.tenantId
+            },
+            req
+        });
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 };
@@ -248,17 +334,33 @@ exports.updateCategory = async (req, res) => {
 exports.deleteCategory = async (req, res) => {
     try {
         if (!["admin", "companyAdmin"].includes(req.user.role)) {
-            await Logger.warning('deleteCategory: Access denied', { userId: req.user._id, role: req.user.role });
+            Logger.warn("deleteCategory", "Access denied", {
+                context: {
+                    userId: req.user._id,
+                    role: req.user.role
+                },
+                req
+            });
             return res.status(403).json({ message: "Access denied" });
         }
 
         const target = await ContactCategory.findById(req.params.id);
         if (!target) {
-            await Logger.warning('deleteCategory: Category not found', { categoryId: req.params.id });
+            Logger.warn("deleteCategory", "Category not found", {
+                context: {
+                    categoryId: req.params.id
+                },
+                req
+            });
             return res.status(404).json({ message: "Category not found" });
         }
         if (target.isDefault) {
-            await Logger.info('deleteCategory: Attempt to delete default category', { categoryId: req.params.id });
+            Logger.info("deleteCategory", "Attempt to delete default category", {
+                context: {
+                    categoryId: req.params.id
+                },
+                req
+            });
             return res.status(400).json({ message: "Default categories cannot be deleted" });
         }
 
@@ -268,11 +370,23 @@ exports.deleteCategory = async (req, res) => {
             { new: true }
         );
 
-        await Logger.info('deleteCategory: Category deactivated successfully', { categoryId: category._id, tenantId: req.tenantId });
+        Logger.info("deleteCategory", "Category deactivated successfully", {
+            context: {
+                categoryId: category._id,
+                tenantId: req.tenantId
+            },
+            req
+        });
 
         res.json({ success: true, message: "Category deactivated", data: { category } });
     } catch (err) {
-        await Logger.error('deleteCategory: Server error', { message: err.message, stack: err.stack, tenantId: req.tenantId });
+        Logger.error("deleteCategory", "Server error", {
+            error: err,
+            context: {
+                tenantId: req.tenantId
+            },
+            req
+        });
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 };

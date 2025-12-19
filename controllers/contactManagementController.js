@@ -1,19 +1,21 @@
 // controllers/contactManagementController.js
 const Contact = require("../models/ContactManagement");
+const { enrichContact } = require("../services/audience/enrichmentService");
+const { deriveAutoTags, mergeTags } = require("../services/audience/taggingService");
 // const AudienceSegment = require("../../removed files backup/AudienceSegmentation");
 const ExcelJS = require('exceljs');
 const PDFDocument = require("pdfkit");
 const path = require('path');
 const fs = require("fs");
 const XLSX = require('xlsx');
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 const { default: mongoose } = require("mongoose");
 
 
 // GET /api/contacts
 exports.getContacts = async (req, res) => {
     try {
-        const { page = 1, limit = 10, search = "", segment, status } = req.query;
+        const { page = 1, limit = 10, search = "", status } = req.query;
 
         // ALWAYS restrict to tenant
         let filter = { tenantId: req.tenantId };
@@ -29,14 +31,9 @@ exports.getContacts = async (req, res) => {
         }
 
         // Segment filter
-        if (segment) {
-            const seg = await AudienceSegment.findOne({
-                name: segment,
-                tenantId: req.tenantId   // segment must also belong to same tenant
-            });
-
-            if (seg) filter.segment = seg._id;
-        }
+        // if (segment) {
+        //     filter.segment = segment;
+        // }
 
         // Status filter
         if (status) {
@@ -47,7 +44,7 @@ exports.getContacts = async (req, res) => {
         const total = await Contact.countDocuments(filter);
 
         const contacts = await Contact.find(filter)
-            .populate("segment", "name")
+            // .populate("segment", "name")
             .sort({ createdAt: -1 })
             .skip((page - 1) * limit)
             .limit(Number(limit));
@@ -164,17 +161,10 @@ exports.bulkCreateContacts = async (req, res) => {
                 }
             }
 
-            // Segment check / create
+            // Segment check (size tracking disabled; hook to category-based segments instead)
             let segmentDoc = null;
             if (segmentName) {
-                segmentDoc = await AudienceSegment.findOne({ tenantId, name: segmentName });
-                if (!segmentDoc) {
-                    console.log(`⚠️ Segment "${segmentName}" not found for email ${email}. Contact created without segment.`);
-                    // errors.push({ email, message: `Segment "${segmentName}" does not exist` }); // optional
-                } else {
-                    segmentDoc.size += 1;
-                    await segmentDoc.save();
-                }
+                console.log(`ℹ️ Segment reference provided (${segmentName}); size tracking skipped (AudienceSegment disabled).`);
             }
 
             // Check duplicate email
@@ -188,6 +178,10 @@ exports.bulkCreateContacts = async (req, res) => {
             // Create contact
             console.log("🟢 Creating new contact:", email);
 
+            const enrichment = enrichContact({ phone, email, company });
+            const autoTags = deriveAutoTags({ createdAt: new Date(), lastActivity: new Date(), tags, status: statusStr });
+            const { mergedString, mergedArray } = mergeTags(tags, autoTags);
+
             const newContact = await Contact.create({
                 tenantId,
                 name,
@@ -195,9 +189,11 @@ exports.bulkCreateContacts = async (req, res) => {
                 phone,
                 company,
                 segment: segmentDoc ? segmentDoc._id : null,
-                tags,
+                tags: mergedString,
+                autoTags: mergedArray,
                 status: statusStr || 'Active',
                 contactCategoryId: contactCategory,
+                enrichment,
                 lastActivity: new Date(),
             });
 
@@ -210,11 +206,16 @@ exports.bulkCreateContacts = async (req, res) => {
         console.log("➡️ Errors:", errors.length);
 
         // Logging
-        await Logger.info({
-            user: currentUser._id,
-            action: "Bulk Create Contacts",
-            status: "Success",
-            details: `Processed: ${dataRows.length}, Success: ${successes.length}, Failed: ${errors.length}`
+        Logger.info('bulkCreateContacts', 'Bulk contacts creation completed successfully', {
+            context: {
+                userId: currentUser._id,
+                action: 'Bulk Create Contacts',
+                status: 'Success',
+                processed: dataRows.length,
+                successes: successes.length,
+                failures: errors.length
+            },
+            req // add only if req is available in this scope
         });
 
         res.status(201).json({
@@ -229,11 +230,14 @@ exports.bulkCreateContacts = async (req, res) => {
     } catch (err) {
         console.error("❌ BulkCreateContacts error:", err);
 
-        await Logger.error({
-            user: req.user?._id,
-            action: "Bulk Create Contacts",
-            status: "Failed",
-            details: err.message,
+        Logger.error('bulkCreateContacts', 'Bulk contacts creation failed', {
+            context: {
+                userId: req.user?._id,
+                action: 'Bulk Create Contacts',
+                status: 'Failed'
+            },
+            error: err, // ye daalna zaroori hai stackTrace ke liye
+            req
         });
 
         res.status(500).json({ message: 'Internal Server Error', error: err.message });
@@ -244,31 +248,20 @@ exports.bulkCreateContacts = async (req, res) => {
 exports.createContact = async (req, res) => {
     try {
         console.log("🔹 Request body:", req.body);
-        const { name, email, phone, company, segment, tags, status, contactCategories } = req.body;
+        const { name, email, phone, company, tags, status, contactCategories } = req.body;
 
-        let segmentId = null;
-        if (segment) {
-            segmentId = typeof segment === "string" ? segment : segment._id;
-        }
-
-        if (segmentId) {
-            segmentDoc = await AudienceSegment.findOne({
-                _id: segmentId,
-                tenantId: req.tenantId
-            });
-            if (!segmentDoc) {
-                return res.status(403).json({
-                    message: "Invalid segment or you don't have permission"
-                });
-            }
-            segmentDoc.size += 1;
-            await segmentDoc.save();
-
-        } else {
-            console.log("ℹ️ No segment provided, proceeding without segment");
-        }
-
+        // const segmentId = segment ? (typeof segment === "string" ? segment : segment._id) : null;
         const contactCategoriesIds = contactCategories?.map(id => new mongoose.Types.ObjectId(id));
+
+        const now = new Date();
+        const enrichment = enrichContact({ phone, email, company });
+        const autoTags = deriveAutoTags({
+            createdAt: now,
+            lastActivity: now,
+            tags,
+            status,
+        });
+        const { mergedString, mergedArray } = mergeTags(tags, autoTags);
 
         // Create contact with tenantId
         console.log("🔹 Creating new contact...");
@@ -279,10 +272,12 @@ exports.createContact = async (req, res) => {
             phone,
             company,
             contactCategories: contactCategoriesIds || [],
-            segment: segmentDoc ? segmentDoc._id : null,
-            tags,
+            // segment: segmentId || null,
+            tags: mergedString,
+            autoTags: mergedArray,
             status: status || "Active",
-            lastActivity: new Date(),
+            enrichment,
+            lastActivity: now,
         });
 
         console.log("✅ Contact created:", newContact._id);
@@ -290,8 +285,8 @@ exports.createContact = async (req, res) => {
         const contactWithSegment = await Contact.findOne({
             _id: newContact._id,
             tenantId: req.tenantId
-        }).populate("segment", "name");
-
+        })
+        // .populate("segment", "name size");
         console.log("🔹 Returning contact with populated segment");
         res.status(201).json(contactWithSegment);
 
@@ -319,7 +314,6 @@ exports.updateContact = async (req, res) => {
 
         const oldSegmentId = contact.segment?._id?.toString() || null;
 
-        // ← YEH SABSE STRONG FIX HAI (string, object, mongoose doc – sab handle karega)
         let newSegmentId = null;
         if (segment) {
             if (typeof segment === 'string' && segment.trim() !== '') {
@@ -336,39 +330,8 @@ exports.updateContact = async (req, res) => {
         console.log("Old Segment ID:", oldSegmentId);
         console.log("New Segment ID:", newSegmentId);
 
-        // Agar segment change hua hai
         if (oldSegmentId !== newSegmentId) {
-
-            // Purana segment size ghataye
-            if (oldSegmentId) {
-                await AudienceSegment.updateOne(
-                    { _id: oldSegmentId, tenantId: req.tenantId },
-                    { $inc: { size: -1 } }
-                );
-            }
-
-            // Naya segment size badhaye + valid hai ya nahi check
-            if (newSegmentId) {
-                const segmentDoc = await AudienceSegment.findOne({
-                    _id: newSegmentId,
-                    tenantId: req.tenantId
-                });
-
-                if (!segmentDoc) {
-                    return res.status(400).json({
-                        message: "Segment not found ya aapka tenant ka nahi hai!"
-                    });
-                }
-
-                await AudienceSegment.updateOne(
-                    { _id: newSegmentId },
-                    { $inc: { size: 1 } }
-                );
-
-                contact.segment = newSegmentId; // ← yeh line important hai
-            } else {
-                contact.segment = null;
-            }
+            contact.segment = newSegmentId || null;
         }
         console.log("Segment updated to:", contact.segment);
 
@@ -380,9 +343,21 @@ exports.updateContact = async (req, res) => {
         if (contactCategories !== undefined) {
             contact.contactCategories = contactCategories.map(id => new mongoose.Types.ObjectId(id));
         }
-        if (tags !== undefined) contact.tags = tags;
         if (status !== undefined) contact.status = status;
 
+        const updatedTagsSource = tags !== undefined ? tags : contact.tags;
+        const enrichment = enrichContact({ phone: contact.phone, email: contact.email, company: contact.company });
+        const autoTags = deriveAutoTags({
+            createdAt: contact.createdAt,
+            lastActivity: contact.lastActivity,
+            tags: updatedTagsSource,
+            status: contact.status,
+        });
+        const { mergedString, mergedArray } = mergeTags(updatedTagsSource, autoTags);
+
+        contact.tags = mergedString;
+        contact.autoTags = mergedArray;
+        contact.enrichment = enrichment;
         contact.lastActivity = new Date();
         await contact.save();
 
@@ -407,14 +382,6 @@ exports.deleteContact = async (req, res) => {
         });
 
         if (!contact) return res.status(404).json({ message: "Contact not found" });
-
-        // Reduce segment count only in same tenant
-        if (contact.segment) {
-            await AudienceSegment.findOneAndUpdate(
-                { _id: contact.segment, tenantId: req.tenantId },
-                { $inc: { size: -1 } }
-            );
-        }
 
         await Contact.deleteOne({ _id: req.params.id, tenantId: req.tenantId });
 

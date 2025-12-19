@@ -20,10 +20,13 @@ module.exports = async function createSurvey(req, res, next) {
 
     await survey.save();
 
-    await Logger.info("survey_create", "Survey created successfully", {
-      surveyId: survey._id,
-      tenant: req.user.tenant,
-      createdBy: req.user._id,
+    Logger.info("survey_create", "Survey created successfully", {
+      context: {
+        surveyId: survey._id,
+        tenantId: req.user.tenant,
+        createdBy: req.user._id
+      },
+      req
     });
 
     res.status(201).json({
@@ -32,9 +35,10 @@ module.exports = async function createSurvey(req, res, next) {
     });
 
   } catch (err) {
-    await Logger.error("survey_create_error", "Survey creation failed", {
-      err: err.message,
-      stack: err.stack,
+    Logger.error("survey_create", "Survey creation failed", {
+      error: err,
+      context: { tenantId: req.user.tenant },
+      req
     });
     next(err);
   }

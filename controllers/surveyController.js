@@ -14,7 +14,7 @@ const { getNextQuestion } = require("../utils/logicEngine");
 const aiClient = require("../utils/aiClient");
 const { analyzeFeedbackLogic } = require("./feedbackController")
 const { sendSurveyWhatsApp } = require('./distributionController');
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 const Joi = require("joi");
 const generateSurveyToken = require("../utils/generateSurveyToken");
 const resolveSurveyRecipients = require("../utils/resolveSurveyRecipients");
@@ -252,7 +252,7 @@ const generateActionsFromResponse = async (response, survey, tenantId) => {
             // Fallback
             description = `Auto: Address "${feedbackText.substring(0, 80)}..."`;
             priority = "high";
-            await Logger.warning("⚠️ Failed to parse AI response, using fallback", { responseId: response._id, surveyId: survey._id });
+            await Logger.warn("⚠️ Failed to parse AI response, using fallback", { responseId: response._id, surveyId: survey._id });
         }
 
         // Create Action
@@ -359,7 +359,7 @@ const analyzeFeedbackSentiment = async (response, survey) => {
             analysis = JSON.parse(aiResponse.text || '{}');
             await Logger.info("✅ AI sentiment analysis success", { responseId: response._id, analysis });
         } catch (parseError) {
-            await Logger.warning("⚠️ Failed to parse AI response, using fallback", { responseId: response._id, rawAIText: aiResponse.text });
+            await Logger.warn("⚠️ Failed to parse AI response, using fallback", { responseId: response._id, rawAIText: aiResponse.text });
         }
 
         return {
@@ -444,7 +444,7 @@ exports.getAllSurveys = async (req, res, next) => {
         } else if (req.user?.tenant) {
             query.tenant = req.user.tenant;
         } else {
-            await Logger.warning("getAllSurveys: Access denied — no tenant", {
+            await Logger.warn("getAllSurveys: Access denied — no tenant", {
                 userId: req.user?._id,
             });
             return res.status(403).json({ message: "Access denied: No tenant associated with this user" });
@@ -596,7 +596,7 @@ exports.getPublicSurveyById = async (req, res, next) => {
         }).select("title description questions themeColor estimatedTime thankYouPage");
 
         if (!survey) {
-            await Logger.warning("getPublicSurveyById: Survey not found or not public", {
+            await Logger.warn("getPublicSurveyById: Survey not found or not public", {
                 surveyId: req.params.id,
             });
             return res
@@ -629,7 +629,7 @@ exports.getSurveyById = async (req, res, next) => {
         }).populate("createdBy", "name");
 
         if (!survey || survey.deleted) {
-            await Logger.warning('getSurveyById: Survey not found or deleted', { surveyId: req.params.id, tenantId: req.user.tenant });
+            await Logger.warn('getSurveyById: Survey not found or deleted', { surveyId: req.params.id, tenantId: req.user.tenant });
             return res.status(404).json({ message: "Not found" });
         }
 
@@ -690,7 +690,7 @@ exports.updateSurvey = async (req, res, next) => {
         });
 
         if (!mongoose.Types.ObjectId.isValid(surveyId)) {
-            await Logger.warning("updateSurvey: Invalid survey ID", { surveyId });
+            await Logger.warn("updateSurvey: Invalid survey ID", { surveyId });
             return res.status(400).json({ message: "Invalid survey id" });
         }
 
@@ -702,7 +702,7 @@ exports.updateSurvey = async (req, res, next) => {
         });
 
         if (!survey) {
-            await Logger.warning("updateSurvey: Survey not found or forbidden", {
+            await Logger.warn("updateSurvey: Survey not found or forbidden", {
                 surveyId,
                 tenantId: req.user.tenant,
             });
@@ -748,7 +748,7 @@ exports.updateSurvey = async (req, res, next) => {
                             oldLogoId: survey.logo.public_id,
                         });
                     } catch (err) {
-                        await Logger.warning("updateSurvey: Failed to destroy old logo", {
+                        await Logger.warn("updateSurvey: Failed to destroy old logo", {
                             error: err.message,
                             oldLogoId: survey.logo.public_id,
                         });
@@ -769,7 +769,7 @@ exports.updateSurvey = async (req, res, next) => {
                             path: req.file.path,
                         });
                     } catch (e) {
-                        await Logger.warning("updateSurvey: Failed to remove temp file", {
+                        await Logger.warn("updateSurvey: Failed to remove temp file", {
                             error: e.message,
                         });
                     }
@@ -789,7 +789,7 @@ exports.updateSurvey = async (req, res, next) => {
                     );
                     await Logger.info("updateSurvey: Password protection enabled with new password");
                 } else if (!survey.settings?.password) {
-                    await Logger.warning("updateSurvey: Password missing while enabling protection");
+                    await Logger.warn("updateSurvey: Password missing while enabling protection");
                     return res.status(400).json({
                         message: "Password required when enabling password protection",
                     });
@@ -824,7 +824,7 @@ exports.updateSurvey = async (req, res, next) => {
         if (uploaded && uploaded.public_id) {
             try {
                 await cloudinary.uploader.destroy(uploaded.public_id);
-                await Logger.warning("updateSurvey: Rolled back uploaded logo due to error", {
+                await Logger.warn("updateSurvey: Rolled back uploaded logo due to error", {
                     uploadedLogoId: uploaded.public_id,
                 });
             } catch (cleanupErr) {
@@ -886,7 +886,7 @@ exports.toggleSurveyStatus = async (req, res, next) => {
         });
 
         if (!survey) {
-            await Logger.warning("⚠️ Survey not found for status toggle", {
+            await Logger.warn("⚠️ Survey not found for status toggle", {
                 surveyId: req.params.id,
                 userId: req.user?._id,
             });
@@ -956,7 +956,7 @@ exports.exportSurveyReport = async (req, res, next) => {
         });
 
         if (!survey) {
-            await Logger.warning("⚠️ Survey not found for export", { surveyId: req.params.id });
+            await Logger.warn("⚠️ Survey not found for export", { surveyId: req.params.id });
             return res.status(404).json({ message: "Survey not found" });
         }
 
@@ -1017,7 +1017,7 @@ exports.exportResponses = async (req, res, next) => {
 
         const survey = await Survey.findById(req.params.id);
         if (!survey) {
-            await Logger.warning("⚠️ Survey not found for response export", { surveyId: req.params.id });
+            await Logger.warn("⚠️ Survey not found for response export", { surveyId: req.params.id });
             return res.status(404).json({ message: "Survey not found" });
         }
 
@@ -1068,14 +1068,14 @@ exports.getSurveyResponses = async (req, res, next) => {
 
         // Validate surveyId
         if (!mongoose.Types.ObjectId.isValid(surveyId)) {
-            await Logger.warning("⚠️ Invalid surveyId provided", { surveyId });
+            await Logger.warn("⚠️ Invalid surveyId provided", { surveyId });
             return res.status(400).json({ message: "Invalid surveyId" });
         }
 
         // Ensure survey exists and belongs to tenant
         const survey = await Survey.findOne({ _id: surveyId, tenant: req.user.tenant, deleted: false }).select("_id tenant");
         if (!survey) {
-            await Logger.warning("⚠️ Survey not found or access denied", { surveyId, tenantId: req.user?.tenant });
+            await Logger.warn("⚠️ Survey not found or access denied", { surveyId, tenantId: req.user?.tenant });
             return res.status(404).json({ message: "Survey not found or access denied" });
         }
 
@@ -1095,7 +1095,7 @@ exports.getSurveyResponses = async (req, res, next) => {
             if (startDate) {
                 const sd = new Date(startDate);
                 if (isNaN(sd)) {
-                    await Logger.warning("⚠️ Invalid startDate provided", { startDate });
+                    await Logger.warn("⚠️ Invalid startDate provided", { startDate });
                     return res.status(400).json({ message: "Invalid startDate" });
                 }
                 query.createdAt.$gte = sd;
@@ -1103,7 +1103,7 @@ exports.getSurveyResponses = async (req, res, next) => {
             if (endDate) {
                 const ed = new Date(endDate);
                 if (isNaN(ed)) {
-                    await Logger.warning("⚠️ Invalid endDate provided", { endDate });
+                    await Logger.warn("⚠️ Invalid endDate provided", { endDate });
                     return res.status(400).json({ message: "Invalid endDate" });
                 }
                 query.createdAt.$lte = ed;
@@ -1167,7 +1167,7 @@ exports.getSurveyAnalytics = async (req, res, next) => {
 
         const survey = await Survey.findById(surveyId);
         if (!survey) {
-            await Logger.warning("⚠️ Survey not found", { surveyId });
+            await Logger.warn("⚠️ Survey not found", { surveyId });
             return res.status(404).json({ message: "Survey not found" });
         }
 
@@ -1211,18 +1211,18 @@ exports.verifySurveyPassword = async (req, res, next) => {
         const survey = await Survey.findById(surveyId);
 
         if (!survey || survey.deleted || survey.status !== "active") {
-            await Logger.warning("⚠️ Survey not found or inactive", { surveyId });
+            await Logger.warn("⚠️ Survey not found or inactive", { surveyId });
             return res.status(404).json({ message: "Survey not found" });
         }
 
         if (!survey.settings?.isPasswordProtected) {
-            await Logger.warning("⚠️ Survey is not password protected", { surveyId });
+            await Logger.warn("⚠️ Survey is not password protected", { surveyId });
             return res.status(400).json({ message: "Survey is not password protected" });
         }
 
         const match = await bcrypt.compare(password, survey.settings.password || "");
         if (!match) {
-            await Logger.warning("❌ Invalid survey password attempt", { surveyId, userId: req.user?._id });
+            await Logger.warn("❌ Invalid survey password attempt", { surveyId, userId: req.user?._id });
             return res.status(401).json({ message: "Invalid password" });
         }
 
@@ -1244,7 +1244,7 @@ exports.createQuestion = async (req, res) => {
 
         const survey = await Survey.findById(id);
         if (!survey) {
-            await Logger.warning("⚠️ Survey not found while adding question", { surveyId: id });
+            await Logger.warn("⚠️ Survey not found while adding question", { surveyId: id });
             return res.status(404).json({ message: "Survey not found" });
         }
 
@@ -1269,7 +1269,7 @@ exports.deleteQuestion = async (req, res) => {
 
         const survey = await Survey.findById(id);
         if (!survey) {
-            await Logger.warning("⚠️ Survey not found while deleting question", { surveyId: id });
+            await Logger.warn("⚠️ Survey not found while deleting question", { surveyId: id });
             return res.status(404).json({ message: "Survey not found" });
         }
 

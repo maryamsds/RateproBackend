@@ -67,17 +67,24 @@ exports.autoPublishScheduledSurveys = async () => {
           }).catch(console.error);
         }
 
-        await Logger.info("Auto-published via CRON", {
-          surveyId: survey._id,
-          recipients: created
+        Logger.info("autoPublishCron", "Survey auto-published via CRON", {
+          context: { surveyId: survey._id, recipients: created },
+          req
         });
 
       } catch (err) {
-        Logger.error("Auto publish failed for one survey", { error: err.message });
+
+        Logger.error("autoPublishCron", "Auto publish failed for one survey", {
+          error: err,
+          req
+        });
       }
     }
 
   } catch (err) {
-    Logger.error("CRON crashed", { error: err.message });
+    Logger.error("autoPublishCron", "CRON crashed", {
+      error: err,
+      req
+    });
   }
 };

@@ -1,6 +1,6 @@
 // controllers/permissionController.js
 const Permission = require('../models/Permission');
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 
 // GET: Get all permissions
 exports.getPermissions = async (req, res, next) => {
@@ -8,30 +8,37 @@ exports.getPermissions = async (req, res, next) => {
     const permissions = await Permission.find().select('_id name description group');
 
     if (!permissions || permissions.length === 0) {
-      await Logger.warning('getPermissions', 'No permissions found', {
-        triggeredBy: req.user?.email,
-        tenantId: req.tenantId,
-        statusCode: 404,
+      Logger.warn("getPermissions", "No permissions found", {
+        context: {
+          triggeredBy: req.user?.email,
+          tenantId: req.tenantId,
+          statusCode: 404
+        },
+        req
       });
       return res.status(404).json({ message: "No permissions found" });
     }
 
-    await Logger.info('getPermissions', 'Permissions fetched successfully', {
-      triggeredBy: req.user?.email,
-      tenantId: req.tenantId,
-      totalPermissions: permissions.length,
-      statusCode: 200,
+    Logger.warn("getPermissions", "No permissions found", {
+      context: {
+        triggeredBy: req.user?.email,
+        tenantId: req.tenantId,
+        statusCode: 404
+      },
+      req
     });
 
     res.status(200).json({ permissions });
   } catch (err) {
     console.error("Error getting permissions:", err);
 
-    await Logger.error('getPermissions', 'Error fetching permissions', {
-      triggeredBy: req.user?.email,
-      tenantId: req.tenantId,
-      message: err.message,
-      stack: err.stack,
+    Logger.error("getPermissions", "Error fetching permissions", {
+      error: err,
+      context: {
+        triggeredBy: req.user?.email,
+        tenantId: req.tenantId
+      },
+      req
     });
 
     res.status(500).json({ message: "Failed to fetch permissions", error: err.message });

@@ -1,6 +1,6 @@
 // controllers/insightController.js
 const { calculateNPS, generateSentimentHeatmap, generateTrendline } = require("../utils/insightUtils");
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 
 const getPredictiveInsights = async (req, res) => {
   const { surveyId } = req.params;
@@ -9,18 +9,23 @@ const getPredictiveInsights = async (req, res) => {
     const sentimentHeatmap = await generateSentimentHeatmap(surveyId);
     const trendline = await generateTrendline(surveyId);
 
-    await Logger.info("getPredictiveInsights: Insights generated successfully", {
-      surveyId,
-      npsScore: nps?.score,
-      sentimentCount: sentimentHeatmap?.length || 0,
+    Logger.info("getPredictiveInsights", "Insights generated successfully", {
+      context: {
+        surveyId,
+        npsScore: nps?.score,
+        sentimentCount: sentimentHeatmap?.length || 0
+      },
+      req
     });
 
     res.json({ nps, sentimentHeatmap, trendline });
   } catch (err) {
-    await Logger.error("getPredictiveInsights: Error generating insights", {
-      surveyId,
-      message: err.message,
-      stack: err.stack,
+    Logger.error("getPredictiveInsights", "Error generating insights", {
+      error: err,
+      context: {
+        surveyId
+      },
+      req
     });
     res.status(500).json({ error: err.message });
   }

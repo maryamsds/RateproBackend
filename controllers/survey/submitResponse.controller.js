@@ -9,9 +9,9 @@ exports.submitSurveyResponse = async (req, res, next) => {
 
     const result = await responseService.processResponse(token, answers);
 
-    await Logger.info("Survey response submitted successfully", {
-      token,
-      responseId: result.responseId
+    Logger.info("surveyResponse", "Survey response submitted successfully", {
+      context: { token, responseId: result.responseId },
+      req
     });
 
     res.status(200).json({
@@ -20,6 +20,11 @@ exports.submitSurveyResponse = async (req, res, next) => {
     });
 
   } catch (err) {
+    Logger.error("surveyResponse", "Error submitting survey response", {
+      error: err,
+      context: { token: req.params.token },
+      req
+    });
     next(err);
   }
 };

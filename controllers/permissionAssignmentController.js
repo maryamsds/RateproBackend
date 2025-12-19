@@ -52,13 +52,16 @@ exports.assignPermission = async (req, res, next) => {
             .populate('permissionId', 'name description');
 
         // ✅ Log only when successful (201)
-        await Logger.info('assignPermission', 'Permission successfully assigned', {
-            triggeredBy: req.user?.email,
-            tenantId: req.tenantId,
-            userId,
-            permissionId,
-            assignmentId: assignment._id,
-            statusCode: 201
+        Logger.info("assignPermission", "Permission successfully assigned", {
+            context: {
+                triggeredBy: req.user?.email,
+                tenantId: req.tenantId,
+                userId,
+                permissionId,
+                assignmentId: assignment._id,
+                statusCode: 201
+            },
+            req
         });
 
         res.status(201).json({
@@ -71,11 +74,13 @@ exports.assignPermission = async (req, res, next) => {
         console.error('assignPermission error:', err);
 
         // ❌ Log only on error
-        await Logger.error('assignPermission', 'Failed to assign permission', {
-            triggeredBy: req.user?.email,
-            tenantId: req.tenantId,
-            message: err.message,
-            stack: err.stack
+        Logger.error("assignPermission", "Failed to assign permission", {
+            error: err,
+            context: {
+                triggeredBy: req.user?.email,
+                tenantId: req.tenantId
+            },
+            req
         });
 
         res.status(500).json({ success: false, message: err.message });
@@ -100,11 +105,14 @@ exports.removePermission = async (req, res, next) => {
         await PermissionAssignment.findByIdAndDelete(id);
 
         // ✅ Log only when successfully deleted (200)
-        await Logger.info('removePermission', 'Permission assignment removed', {
-            triggeredBy: req.user?.email,
-            tenantId: req.tenantId,
-            assignmentId: id,
-            statusCode: 200
+        Logger.info("removePermission", "Permission assignment removed", {
+            context: {
+                triggeredBy: req.user?.email,
+                tenantId: req.tenantId,
+                assignmentId: id,
+                statusCode: 200
+            },
+            req
         });
 
         res.status(200).json({
@@ -116,11 +124,13 @@ exports.removePermission = async (req, res, next) => {
         console.error('removePermission error:', err);
 
         // ❌ Log only on real errors
-        await Logger.error('removePermission', 'Failed to remove permission assignment', {
-            triggeredBy: req.user?.email,
-            tenantId: req.tenantId,
-            message: err.message,
-            stack: err.stack
+        Logger.error("removePermission", "Failed to remove permission assignment", {
+            error: err,
+            context: {
+                triggeredBy: req.user?.email,
+                tenantId: req.tenantId
+            },
+            req
         });
 
         res.status(500).json({ success: false, message: err.message });
@@ -138,11 +148,14 @@ exports.getAssignments = async (req, res, next) => {
             .lean();
 
         // ✅ Log success (200)
-        await Logger.info('getAssignments', 'Fetched permission assignments successfully', {
-            triggeredBy: req.user?.email,
-            tenantId: req.tenantId,
-            assignmentCount: assignments.length,
-            statusCode: 200
+        Logger.info("getAssignments", "Fetched permission assignments successfully", {
+            context: {
+                triggeredBy: req.user?.email,
+                tenantId: req.tenantId,
+                assignmentCount: assignments.length,
+                statusCode: 200
+            },
+            req
         });
 
         res.status(200).json({
@@ -154,11 +167,13 @@ exports.getAssignments = async (req, res, next) => {
         console.error('getAssignments error:', err);
 
         // ❌ Log actual error
-        await Logger.error('getAssignments', 'Failed to fetch permission assignments', {
-            triggeredBy: req.user?.email,
-            tenantId: req.tenantId,
-            message: err.message,
-            stack: err.stack
+        Logger.error("getAssignments", "Failed to fetch permission assignments", {
+            error: err,
+            context: {
+                triggeredBy: req.user?.email,
+                tenantId: req.tenantId
+            },
+            req
         });
 
         res.status(500).json({ success: false, message: err.message });
@@ -177,12 +192,16 @@ exports.getTenantUsers = async (req, res, next) => {
             .lean();
 
         // ✅ log success when response is 200
-        await Logger.info('getTenantUsers', 'Fetched tenant users successfully', {
-            triggeredBy: req.user?.email,
-            tenantId: req.tenantId,
-            userCount: users.length,
-            statusCode: 200
+        Logger.info("getTenantUsers", "Fetched tenant users successfully", {
+            context: {
+                triggeredBy: req.user?.email,
+                tenantId: req.tenantId,
+                userCount: users.length,
+                statusCode: 200
+            },
+            req
         });
+
 
         res.status(200).json({
             success: true,
@@ -193,11 +212,13 @@ exports.getTenantUsers = async (req, res, next) => {
         console.error('getTenantUsers error:', err);
 
         // ❌ log error
-        await Logger.error('getTenantUsers', 'Failed to fetch tenant users', {
-            triggeredBy: req.user?.email,
-            tenantId: req.tenantId,
-            message: err.message,
-            stack: err.stack
+        Logger.error("getTenantUsers", "Failed to fetch tenant users", {
+            error: err,
+            context: {
+                triggeredBy: req.user?.email,
+                tenantId: req.tenantId
+            },
+            req
         });
 
         res.status(500).json({
@@ -222,11 +243,14 @@ exports.getUserPermissions = async (req, res, next) => {
         });
 
         if (!user) {
-            await Logger.warning('getUserPermissions', 'User not found while fetching permissions', {
-                triggeredBy: req.user?.email,
-                userId,
-                tenantId,
-                statusCode: 404,
+            Logger.warn("getUserPermissions", "User not found while fetching permissions", {
+                context: {
+                    triggeredBy: req.user?.email,
+                    userId,
+                    tenantId,
+                    statusCode: 404
+                },
+                req
             });
             return res.status(404).json({ message: 'User not found' });
         }
@@ -257,26 +281,31 @@ exports.getUserPermissions = async (req, res, next) => {
         ];
 
         // ✅ success log
-        await Logger.info('getUserPermissions', 'User permissions fetched successfully', {
-            triggeredBy: req.user?.email,
-            userId,
-            tenantId,
-            totalPermissions: allPermissions.length,
-            statusCode: 200,
+        Logger.info("getUserPermissions", "User permissions fetched successfully", {
+            context: {
+                triggeredBy: req.user?.email,
+                userId,
+                tenantId,
+                totalPermissions: allPermissions.length,
+                statusCode: 200
+            },
+            req
         });
+
 
         return res.status(200).json({ permissions: allPermissions });
     } catch (err) {
         console.error('getUserPermissions: Error', { error: err.message });
 
         // ❌ error log
-        await Logger.error('getUserPermissions', 'Error fetching user permissions', {
-            triggeredBy: req.user?.email,
-            tenantId: req.tenantId,
-            message: err.message,
-            stack: err.stack,
+        Logger.error("getUserPermissions", "Error fetching user permissions", {
+            error: err,
+            context: {
+                triggeredBy: req.user?.email,
+                tenantId: req.tenantId
+            },
+            req
         });
-
         return res.status(500).json({ message: 'Internal Server Error' });
     }
 }; 

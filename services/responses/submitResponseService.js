@@ -53,10 +53,13 @@ exports.submitSurveyResponseService = async ({
     tenantId: invite.tenant
   });
 
-  await Logger.info("Survey response submitted", {
-    surveyId: invite.survey._id,
-    responseId: response._id,
-    inviteId: invite._id
+  Logger.info("surveyResponse", "Survey response submitted", {
+    context: {
+      surveyId: invite.survey._id,
+      responseId: response._id,
+      inviteId: invite._id
+    },
+    req
   });
 
   return response;

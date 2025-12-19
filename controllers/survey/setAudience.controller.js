@@ -22,10 +22,13 @@ module.exports = async function setAudience(req, res, next) {
       payload,
     });
 
-    await Logger.info("audience_set", "Survey target audience set", {
-      surveyId,
-      tenantId: req.user.tenant,
-      updatedBy: req.user._id,
+    Logger.info("audience_set", "Survey target audience set", {
+      context: {
+        surveyId,
+        tenantId: req.user.tenant,
+        updatedBy: req.user._id
+      },
+      req
     });
 
     res.json({
@@ -34,9 +37,10 @@ module.exports = async function setAudience(req, res, next) {
     });
 
   } catch (err) {
-    await Logger.error("audience_set_error", "Failed to set audience", {
-      error: err.message,
-      stack: err.stack,
+    Logger.error("audience_set", "Failed to set audience", {
+      error: err,
+      context: { surveyId, tenantId: req.user.tenant },
+      req
     });
     next(err);
   }

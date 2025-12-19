@@ -15,7 +15,10 @@ exports.verifyInviteToken = async (req, res, next) => {
 
   try {
     if (!token || typeof token !== "string") {
-      await Logger.warning("verifyInviteToken: missing token", { ip: requesterIp });
+      Logger.warn("verifyInviteToken", "Missing token", {
+        context: { ip: requesterIp },
+        req
+      });
       return res.status(400).json({ message: "Invalid request" });
     }
 
@@ -28,25 +31,37 @@ exports.verifyInviteToken = async (req, res, next) => {
     }).lean();
 
     if (!invite) {
-      await Logger.warning("verifyInviteToken: invite not found", { token, ip: requesterIp });
+      Logger.warn("verifyInviteToken", "Invite not found", {
+        context: { token, ip: requesterIp },
+        req
+      });ٖ
       return res.status(404).json({ message: "Invalid or expired link" });
     }
 
     // If invite already responded, return 410 Gone
     if (invite.status === "responded" || invite.respondedAt) {
-      await Logger.info("verifyInviteToken: invite already responded", { inviteId: invite._id, token, ip: requesterIp });
+      Logger.info("verifyInviteToken", "Invite already responded", {
+        context: { inviteId: invite._id, token, ip: requesterIp },
+        req
+      });
       return res.status(410).json({ message: "This survey link has already been used." });
     }
 
     // Basic tenant / survey guard
     const survey = invite.survey;
     if (!survey) {
-      await Logger.error("verifyInviteToken: invite has no survey attached", { inviteId: invite._id });
+      Logger.error("verifyInviteToken", "Invite has no survey attached", {
+        context: { inviteId: invite._id },
+        req
+      });
       return res.status(404).json({ message: "Survey not found for this link" });
     }
 
     if (survey.deleted) {
-      await Logger.warning("verifyInviteToken: survey deleted", { surveyId: survey._id, inviteId: invite._id });
+      Logger.warn("verifyInviteToken", "Survey deleted", {
+        context: { surveyId: survey._id, inviteId: invite._id },
+        req
+      });
       return res.status(410).json({ message: "Survey is no longer available" });
     }
 
@@ -56,14 +71,20 @@ exports.verifyInviteToken = async (req, res, next) => {
       // allow access if scheduled and publishedAt already set and <= now
       const publishedAt = survey.schedule?.publishedAt;
       if (!publishedAt || new Date(publishedAt) > now) {
-        await Logger.warning("verifyInviteToken: survey not active yet", { surveyId: survey._id, status: survey.status, inviteId: invite._id });
+        Logger.warn("verifyInviteToken", "Survey not active yet", {
+          context: { surveyId: survey._id, status: survey.status, inviteId: invite._id },
+          req
+        });
         return res.status(403).json({ message: "Survey is not active" });
       }
     }
 
     // If invite has an expiry concept (optional), check here (example field: expiresAt)
     if (invite.expiresAt && new Date(invite.expiresAt) < now) {
-      await Logger.info("verifyInviteToken: invite expired", { inviteId: invite._id, token, ip: requesterIp });
+      Logger.info("verifyInviteToken", "Invite expired", {
+        context: { inviteId: invite._id, token, ip: requesterIp },
+        req
+      });
       return res.status(410).json({ message: "This survey link has expired" });
     }
 
@@ -78,7 +99,7 @@ exports.verifyInviteToken = async (req, res, next) => {
 
     await SurveyInvite.updateOne({ _id: invite._id }, { $set: update }).catch(err => {
       // non-fatal, log and continue — we still return the survey
-      Logger.warning("verifyInviteToken: failed to update invite opened metadata", { inviteId: invite._id, error: err.message });
+      Logger.warn("verifyInviteToken: failed to update invite opened metadata", { inviteId: invite._id, error: err.message });
     });
 
     // Build safe survey object to return (avoid leaking tenant internal fields)
@@ -94,10 +115,9 @@ exports.verifyInviteToken = async (req, res, next) => {
       isPasswordProtected: survey.settings?.isPasswordProtected || false
     };
 
-    await Logger.info("verifyInviteToken: invite verified and survey returned", {
-      inviteId: invite._id,
-      surveyId: survey._id,
-      ip: requesterIp
+    Logger.info("verifyInviteToken", "Invite verified and survey returned", {
+      context: { inviteId: invite._id, surveyId: survey._id, ip: requesterIp },
+      req
     });
 
     return res.status(200).json({
@@ -107,7 +127,10 @@ exports.verifyInviteToken = async (req, res, next) => {
     });
 
   } catch (err) {
-    await Logger.error("verifyInviteToken: unexpected error", { error: err.message, stack: err.stack });
+    Logger.error("verifyInviteToken", "Unexpected error", {
+      context: { error: err.message, stack: err.stack },
+      req
+    });
     return next(err);
   }
 };

@@ -5,7 +5,7 @@ const { nanoid } = require("nanoid");
 const aiClient = require("../utils/aiClient"); // implement wrapper for chosen LLM (OpenAI recommended)
 const Joi = require("joi");
 const { default: mongoose } = require("mongoose");
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 
 // Simple validation schemas
 const draftSchema = Joi.object({
@@ -93,10 +93,14 @@ exports.aiDraftSurvey = async (req, res, next) => {
     const { error, value } = draftSchema.validate(req.body);
 
     if (error) {
-      await Logger.warning("aiDraftSurvey", "Validation failed for AI draft request", {
-        userId: req.user?._id,
-        tenant: req.user.tenant,
-        message: error.details[0].message
+      Logger.warn("aiDraftSurvey", "Validation failed for AI draft request", {
+        error: error, // assuming 'error' is the full error object with details
+        context: {
+          userId: req.user?._id,
+          tenant: req.user.tenant,
+          validationMessage: error.details?.[0]?.message
+        },
+        req
       });
       return res.status(400).json({ message: error.details[0].message });
     }
@@ -117,9 +121,12 @@ exports.aiDraftSurvey = async (req, res, next) => {
 
     const tenant = tenantId ? await Tenant.findById(tenantId) : req.user.tenant;
     if (!tenant) {
-      await Logger.warning("aiDraftSurvey", "Tenant not found or missing", {
-        userId: req.user?._id,
-        tenantId
+      Logger.warn("aiDraftSurvey", "Tenant not found or missing", {
+        context: {
+          userId: req.user?._id,
+          tenantId
+        },
+        req
       });
       return res.status(403).json({ message: "Tenant required or not found" });
     }
@@ -232,22 +239,27 @@ exports.aiDraftSurvey = async (req, res, next) => {
       };
     }
 
-    await Logger.info("aiDraftSurvey", "AI survey draft generated successfully", {
-      userId: req.user?._id,
-      tenant: req.user.tenant,
-      type: surveyType,
-      language,
-      questionCount: adjustedQuestionCount
+    Logger.info("aiDraftSurvey", "AI survey draft generated successfully", {
+      context: {
+        userId: req.user?._id,
+        tenant: req.user.tenant,
+        type: surveyType,
+        language,
+        questionCount: adjustedQuestionCount
+      },
+      req
     });
 
     res.status(200).json({ draft: suggestion });
   } catch (err) {
-    await Logger.error("aiDraftSurvey", "AI draft generation failed", {
-      userId: req.user?._id,
-      tenant: req.user.tenant,
-      error: err.message
+    Logger.error("aiDraftSurvey", "AI draft generation failed", {
+      error: err,
+      context: {
+        userId: req.user?._id,
+        tenant: req.user.tenant
+      },
+      req
     });
-
     return res.status(200).json({
       message: "AI temporarily unavailable, showing default draft",
       draft: [
@@ -320,12 +332,14 @@ exports.aiSuggestQuestion = async (req, res, next) => {
     }
 
     // Log success if AI generation worked
-    await Logger.info("aiSuggestQuestion", "AI suggested survey questions", {
-      tenantId: tenant,
-      userId: req.user?._id,
-      suggestionCount: suggestions.length
+    Logger.info("aiSuggestQuestion", "AI suggested survey questions", {
+      context: {
+        tenantId: tenant,
+        userId: req.user?._id,
+        suggestionCount: suggestions.length
+      },
+      req
     });
-
     // Respond with success
     return res.status(200).json({
       success: true,
@@ -335,11 +349,13 @@ exports.aiSuggestQuestion = async (req, res, next) => {
 
   } catch (error) {
     // Log error only on failure
-    await Logger.error("aiSuggestQuestion", "Error suggesting questions", {
-      message: error.message,
-      stack: error.stack,
-      userId: req.user?._id,
-      tenantId: req.user?.tenant
+    Logger.error("aiSuggestQuestion", "Error suggesting questions", {
+      error: error, // poora error object pass kiya taake stack trace bhi save ho
+      context: {
+        userId: req.user?._id,
+        tenantId: req.user?.tenant
+      },
+      req
     });
 
     return res.status(500).json({
@@ -409,13 +425,15 @@ exports.aiOptimizeSurvey = async (req, res, next) => {
     }
 
     // ✅ Log success event
-    await Logger.info("aiOptimizeSurvey", "AI optimized survey successfully", {
-      tenantId: tenant,
-      userId: req.user?._id,
-      surveyId,
-      optimizedKeys: Object.keys(optimized)
+    Logger.info("aiOptimizeSurvey", "AI optimized survey successfully", {
+      context: {
+        tenantId: tenant,
+        userId: req.user?._id,
+        surveyId,
+        optimizedKeys: Object.keys(optimized)
+      },
+      req
     });
-
     // ✅ Respond success
     return res.status(200).json({
       success: true,
@@ -425,13 +443,14 @@ exports.aiOptimizeSurvey = async (req, res, next) => {
 
   } catch (error) {
     // ❌ Log failure event
-    await Logger.error("aiOptimizeSurvey", "Error optimizing survey", {
-      message: error.message,
-      stack: error.stack,
-      tenantId: req.user?.tenant,
-      userId: req.user?._id
+    Logger.error("aiOptimizeSurvey", "Error optimizing survey", {
+      error: error,
+      context: {
+        tenantId: req.user?.tenant,
+        userId: req.user?._id
+      },
+      req
     });
-
     return res.status(500).json({
       success: false,
       message: "Error optimizing survey",
@@ -771,13 +790,15 @@ Return JSON with logic suggestions.
     }
 
     // ✅ Log success only on 200
-    await Logger.info("aiSuggestLogic", "AI suggested logic successfully", {
-      tenantId: tenant,
-      userId: req.user?._id,
-      totalQuestions: questions?.length || 0,
-      hasFollowUps: logicSuggestions?.followUps?.length > 0
+    Logger.info("aiSuggestLogic", "AI suggested logic successfully", {
+      context: {
+        tenantId: tenant,
+        userId: req.user?._id,
+        totalQuestions: questions?.length || 0,
+        hasFollowUps: logicSuggestions?.followUps?.length > 0
+      },
+      req
     });
-
     return res.status(200).json({
       success: true,
       message: "Logic suggestions generated successfully",
@@ -786,11 +807,13 @@ Return JSON with logic suggestions.
 
   } catch (error) {
     // ❌ Log error only on failure
-    await Logger.error("aiSuggestLogic", "Error generating logic suggestions", {
-      message: error.message,
-      stack: error.stack,
-      tenantId: req.user?.tenant,
-      userId: req.user?._id
+    Logger.error("aiSuggestLogic", "Error generating logic suggestions", {
+      error: error,
+      context: {
+        tenantId: req.user?.tenant,
+        userId: req.user?._id
+      },
+      req
     });
 
     return res.status(500).json({
@@ -847,12 +870,15 @@ Return JSON with content sections.
     }
 
     // ✅ Log success only on 200
-    await Logger.info("aiGenerateThankYouPage", "AI generated thank you page successfully", {
-      tenantId: tenant,
-      userId: req.user?._id,
-      surveyType,
-      includeIncentives,
-      tone
+    Logger.info("aiGenerateThankYouPage", "AI generated thank you page successfully", {
+      context: {
+        tenantId: tenant,
+        userId: req.user?._id,
+        surveyType,
+        includeIncentives,
+        tone
+      },
+      req
     });
 
     return res.status(200).json({
@@ -863,11 +889,13 @@ Return JSON with content sections.
 
   } catch (error) {
     // ❌ Log error only on failure
-    await Logger.error("aiGenerateThankYouPage", "Error generating thank you page", {
-      message: error.message,
-      stack: error.stack,
-      tenantId: req.user?.tenant,
-      userId: req.user?._id
+    Logger.error("aiGenerateThankYouPage", "Error generating thank you page", {
+      error: error,
+      context: {
+        tenantId: req.user?.tenant,
+        userId: req.user?._id
+      },
+      req
     });
 
     return res.status(500).json({
@@ -929,11 +957,14 @@ Return structured JSON analysis.
     }
 
     // ✅ Log only when successful (200)
-    await Logger.info("aiAnalyzeFeedback", "AI analyzed feedback successfully", {
-      tenantId: tenant,
-      userId: req.user?._id,
-      surveyTitle,
-      responseCount: responses.length
+    Logger.info("aiAnalyzeFeedback", "AI analyzed feedback successfully", {
+      context: {
+        tenantId: tenant,
+        userId: req.user?._id,
+        surveyTitle,
+        responseCount: responses.length
+      },
+      req
     });
 
     return res.status(200).json({
@@ -944,11 +975,13 @@ Return structured JSON analysis.
 
   } catch (error) {
     // ❌ Log only on failure
-    await Logger.error("aiAnalyzeFeedback", "Error analyzing feedback", {
-      tenantId: req.user?.tenant,
-      userId: req.user?._id,
-      message: error.message,
-      stack: error.stack
+    Logger.error("aiAnalyzeFeedback", "Error analyzing feedback", {
+      error: error,
+      context: {
+        tenantId: req.user?.tenant,
+        userId: req.user?._id
+      },
+      req
     });
 
     return res.status(500).json({
@@ -1020,11 +1053,14 @@ Return JSON with structured insights.
     }
 
     // ✅ Log only if success (status 200)
-    await Logger.info("aiGenerateInsights", "AI-generated business insights successfully", {
-      tenantId: tenant,
-      userId: req.user?._id,
-      timeframe,
-      goals: companyGoals
+    Logger.info("aiGenerateInsights", "AI-generated business insights successfully", {
+      context: {
+        tenantId: tenant,
+        userId: req.user?._id,
+        timeframe,
+        goals: companyGoals
+      },
+      req
     });
 
     return res.status(200).json({
@@ -1035,11 +1071,13 @@ Return JSON with structured insights.
 
   } catch (error) {
     // ❌ Log only if error
-    await Logger.error("aiGenerateInsights", "Error generating insights", {
-      tenantId: req.user?.tenant,
-      userId: req.user?._id,
-      message: error.message,
-      stack: error.stack
+    Logger.error("aiGenerateInsights", "Error generating insights", {
+      error: error,
+      context: {
+        tenantId: req.user?.tenant,
+        userId: req.user?._id
+      },
+      req
     });
 
     return res.status(500).json({

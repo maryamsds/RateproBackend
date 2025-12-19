@@ -13,17 +13,18 @@ exports.getAnalytics = async (req, res, next) => {
 
     // Service layer
     const analytics = await getAnalyticsService(surveyId);
-
-    await Logger.info("Analytics generated", {
-      surveyId,
-      totalResponses: analytics.totalResponses
+    Logger.info("getAnalytics", "Analytics generated", {
+      context: {
+        surveyId
+      },
+      req
     });
 
     res.json(analytics);
   } catch (err) {
-    await Logger.error("Analytics error", {
-      message: err.message,
-      stack: err.stack,
+    Logger.error("generateAnalytics", "Error generating analytics", {
+      error: err,
+      req
     });
     next(err);
   }

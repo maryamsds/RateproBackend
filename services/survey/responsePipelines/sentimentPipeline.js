@@ -16,13 +16,13 @@ module.exports.start = async (responseId) => {
 
   if (!feedbackText.trim()) return;
 
-  await Logger.info("AI sentiment analysis started", {
-    responseId,
-    surveyId: survey._id
+  Logger.info("aiSentiment", "AI sentiment analysis started", {
+    context: { responseId, surveyId: survey._id },
+    req
   });
 
   const ai = await aiClient.complete({
-    contents: [{ parts: [{ text: feedbackText }]}],
+    contents: [{ parts: [{ text: feedbackText }] }],
     maxTokens: 300
   });
 
@@ -38,8 +38,8 @@ module.exports.start = async (responseId) => {
   response.sentimentMeta = analysis;
   await response.save();
 
-  await Logger.info("AI sentiment updated", {
-    responseId,
-    sentiment: response.sentiment
+  Logger.info("aiSentiment", "AI sentiment updated", {
+    context: { responseId, sentiment: response.sentiment },
+    req
   });
 };

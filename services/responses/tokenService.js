@@ -31,7 +31,7 @@ async function ensureUniqueToken() {
       if (!exists) return token;
     } catch (err) {
       // on DB error, just try another token (don't crash here)
-      Logger.warning("ensureUniqueToken: temporary DB error when checking token", { error: err.message });
+      Logger.warn("ensureUniqueToken: temporary DB error when checking token", { error: err.message });
     }
   }
   // fallback, return token anyway — duplicate key will be handled by DB

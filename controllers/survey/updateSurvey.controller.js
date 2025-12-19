@@ -31,10 +31,13 @@ module.exports = async function updateSurvey(req, res, next) {
 
     await survey.save();
 
-    await Logger.info("survey_update", "Survey updated successfully", {
-      surveyId,
-      tenant: req.user.tenant,
-      updatedBy: req.user._id,
+    Logger.info("survey_update", "Survey updated successfully", {
+      context: {
+        surveyId,
+        tenantId: req.user.tenant,
+        updatedBy: req.user._id
+      },
+      req
     });
 
     res.json({
@@ -43,9 +46,10 @@ module.exports = async function updateSurvey(req, res, next) {
     });
 
   } catch (err) {
-    await Logger.error("survey_update_error", "Survey update failed", {
-      error: err.message,
-      stack: err.stack,
+    Logger.error("survey_update", "Survey update failed", {
+      error: err,
+      context: { surveyId, tenantId: req.user.tenant },
+      req
     });
     next(err);
   }

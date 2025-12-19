@@ -10,14 +10,22 @@ exports.publishSurvey = async (req, res, next) => {
 
     const result = await publishService.publish(surveyId, tenantId, userId);
 
-    await Logger.info("Survey published successfully", {
-      surveyId,
-      invitesCreated: result.invitesCreated,
-      userId
+    Logger.info("survey_publish", "Survey published successfully", {
+      context: {
+        surveyId,
+        invitesCreated: result.invitesCreated,
+        userId
+      },
+      req
     });
 
     res.status(200).json(result);
   } catch (err) {
+    Logger.error("survey_publish", "Error publishing survey", {
+      error: err,
+      context: { surveyId: req.params.surveyId, tenantId: req.user.tenant },
+      req
+    });
     next(err);
   }
 };

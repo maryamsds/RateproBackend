@@ -17,7 +17,7 @@ const moment = require("moment");
 const Joi = require("joi");
 const getBaseURL = require("../utils/getBaseURL");
 const XLSX = require('xlsx');
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 
 // Multer setup for Excel
 const multer = require('multer');
@@ -229,7 +229,7 @@ const updateMeSchema = Joi.object({
 //       const verificationLink = `${baseURL}/verify-email?code=${verificationCode}&email=${encodeURIComponent(email)}`;
 //       // 📧 SEND EMAIL USING TEMPLATE
 //       try {
-//         await sendEmail({
+//         sendEmail({
 //           to: email,
 //           templateType: "user_welcome",
 //           templateData: {
@@ -251,7 +251,7 @@ const updateMeSchema = Joi.object({
 
 //       } catch (emailError) {
 //         // Fallback to basic email
-//         await Logger.warning(functionName, 'Template email failed in bulk, sending basic email', {
+//         await Logger.warn(functionName, 'Template email failed in bulk, sending basic email', {
 //           userId: req.user?._id,
 //           error: emailError.message
 //         });
@@ -268,7 +268,7 @@ const updateMeSchema = Joi.object({
 //             <p>Regards,<br/>Team ${companyName}</p>
 //           `;
 
-//         await sendEmail({
+//         sendEmail({
 //           to: email,
 //           subject: 'Verify your email - RatePro',
 //           html: fallbackHTML,
@@ -523,7 +523,7 @@ exports.bulkCreateUsers = async (req, res) => {
           const verificationLink = `${baseURL}/verify-email?code=${verificationCode}&email=${encodeURIComponent(email)}`;
 
           try {
-            await sendEmail({
+            sendEmail({
               to: email,
               templateType: "user_welcome",
               templateData: {
@@ -536,18 +536,23 @@ exports.bulkCreateUsers = async (req, res) => {
               },
             });
 
-            await Logger.info({
-              user: req.user?._id,
-              action: functionName,
-              status: "EmailSent",
-              details: `Welcome email sent to ${email}`,
+            Logger.info("bulkCreateUsers", "Welcome email sent", {
+              context: {
+                userId: req.user?._id,
+                status: "EmailSent",
+                details: `Welcome email sent to ${email}`
+              },
+              req
             });
+
           } catch (emailError) {
-            await Logger.warning({
-              user: req.user?._id,
-              action: functionName,
-              status: "EmailFailed",
-              details: `Template email failed for ${email}, sending basic email. Error: ${emailError.message}`,
+            Logger.warn("bulkCreateUsers", "Email sending failed", {
+              context: {
+                userId: req.user?._id,
+                status: "EmailFailed",
+                details: `Template email failed for ${email}, sending basic email. Error: ${emailError.message}`,
+              },
+              req
             });
 
             // 📨 Fallback basic email
@@ -560,7 +565,7 @@ exports.bulkCreateUsers = async (req, res) => {
               <p>This link expires in ${process.env.OTP_EXPIRE_MINUTES} minute(s).</p>
               <br/><p>Regards,<br/>Team ${companyName}</p>
             `;
-            await sendEmail({
+            sendEmail({
               to: email,
               subject: `Verify your email - ${companyName}`,
               html: fallbackHTML,
@@ -573,12 +578,17 @@ exports.bulkCreateUsers = async (req, res) => {
     }
 
     // 🪵 9. Log final summary
-    await Logger.info({
-      user: currentUser._id,
-      action: functionName,
-      status: "Completed",
-      details: `Bulk creation done. Total: ${dataRows.length}, Success: ${successes.length}, Failed: ${errors.length}`,
+    Logger.info("bulkCreateUsers", "Bulk creation completed", {
+      context: {
+        userId: currentUser._id,
+        status: "Completed",
+        total: dataRows.length,
+        success: successes.length,
+        failed: errors.length
+      },
+      req
     });
+
 
     // ✅ 10. Response
     res.status(201).json({
@@ -593,11 +603,12 @@ exports.bulkCreateUsers = async (req, res) => {
   } catch (err) {
     console.error("BulkCreateUsers error:", err);
 
-    await Logger.error({
-      user: req.user?._id,
-      action: functionName,
-      status: "Failed",
-      details: err.message,
+    Logger.error("bulkCreateUsers", "Bulk operation failed", {
+      error: err,
+      context: {
+        userId: req.user?._id
+      },
+      req
     });
 
     if (err.code === 11000) {
@@ -766,7 +777,7 @@ exports.createUser = async (req, res) => {
         }
       });
 
-      await sendEmail({
+      sendEmail({
         to: email,
         templateType: template.type,
         templateData
@@ -774,17 +785,23 @@ exports.createUser = async (req, res) => {
 
       console.log("Template email sent with data:", templateData);
 
-      await Logger.info('createUser', 'Welcome email sent using template', {
-        userId: req.user?._id,
-        newUserId: newUser._id,
-        email,
+      Logger.info("createUser", "Welcome email sent using template", {
+        context: {
+          userId: req.user?._id,
+          newUserId: newUser._id,
+          email
+        },
+        req
       });
 
     } catch (emailError) {
       //  ⚠️ 14. Email Fallback (Basic HTML)
-      await Logger.warning('createUser', 'Template email failed, sending basic email', {
-        userId: req.user?._id,
-        error: emailError.message
+      Logger.warn("createUser", "Template email failed, sending basic email", {
+        context: {
+          userId: req.user?._id,
+          error: emailError.message
+        },
+        req
       });
 
       const fallbackHTML = `
@@ -799,7 +816,7 @@ exports.createUser = async (req, res) => {
         <p>Regards,<br/>Team ${companyName || "Our Platform"}</p>
       `;
 
-      await sendEmail({
+      sendEmail({
         to: email,
         subject: 'Verify your email - RatePro',
         html: fallbackHTML,
@@ -822,11 +839,12 @@ exports.createUser = async (req, res) => {
     console.error('CreateUser error:', err);
 
     // 🔴 16. Error Logging
-    await Logger.error({
-      user: req.user?._id,
-      action: "Create User",
-      status: "Failed",
-      details: err.message,
+    Logger.error("createUser", "User creation failed", {
+      error: err,
+      context: {
+        userId: req.user?._id
+      },
+      req
     });
 
     res.status(500).json({ message: 'Internal Server Error' });
@@ -902,12 +920,14 @@ exports.updateUser = async (req, res, next) => {
     }).select("-password");
 
     // ✅ Log success
-    await Logger.info({
-      user: req.user._id,
-      action: "Update User",
-      status: "Success",
-      details: `User ${id} updated by ${req.user._id}`
+    Logger.info("updateUser", "User updated successfully", {
+      context: {
+        userId: id,
+        updatedBy: req.user._id
+      },
+      req
     });
+
 
     res.status(200).json({
       status: "success",
@@ -919,11 +939,12 @@ exports.updateUser = async (req, res, next) => {
     console.error("❌ UpdateUser Error:", error.message);
 
     // 🔴 Log unexpected error
-    await Logger.error({
-      user: req.user?._id,
-      action: "Update User",
-      status: "Failed",
-      details: error.message
+    Logger.error("updateUser", "User update failed", {
+      error,
+      context: {
+        userId: req.user?._id
+      },
+      req
     });
 
     next(error);
@@ -980,12 +1001,14 @@ exports.deleteUser = async (req, res, next) => {
     }
 
     // ✅ Log success
-    await Logger.info({
-      user: req.user._id,
-      action: "Delete User",
-      status: "Success",
-      details: `Deleted user ${targetUser._id} (role: ${targetUser.role}) by ${req.user._id}`,
-      affectedUsers: affectedUsers.map(u => u._id),
+    Logger.info("deleteUser", "User deleted successfully", {
+      context: {
+        targetUserId: targetUser._id,
+        role: targetUser.role,
+        deletedBy: req.user._id,
+        affectedUsers: affectedUsers.map(u => u._id)
+      },
+      req
     });
 
     res.status(200).json({
@@ -999,11 +1022,12 @@ exports.deleteUser = async (req, res, next) => {
     console.error("❌ DeleteUser Error:", err);
 
     // 🔴 Log unexpected error
-    await Logger.error({
-      user: req.user?._id,
-      action: "Delete User",
-      status: "Failed",
-      details: err.message,
+    Logger.error("deleteUser", "User deletion failed", {
+      error: err,
+      context: {
+        userId: req.user?._id
+      },
+      req
     });
 
     next(err);
@@ -1088,12 +1112,17 @@ exports.toggleActive = async (req, res, next) => {
     }
 
     // ✅ Log success
-    await Logger.info({
-      user: req.user._id,
-      action: "Toggle User Active",
-      status: "Success",
-      details: `User ${targetUser._id} (${targetUser.role}) set to ${targetUser.isActive ? "active" : "inactive"} by ${req.user.role}`,
-      affectedUsers: affectedUsers.map(u => ({ _id: u._id, isActive: u.isActive })),
+    Logger.info("toggleUserActive", "User active status toggled", {
+      context: {
+        targetUserId: targetUser._id,
+        role: targetUser.role,
+        isActive: targetUser.isActive,
+        affectedUsers: affectedUsers.map(u => ({
+          _id: u._id,
+          isActive: u.isActive
+        }))
+      },
+      req
     });
 
     res.status(200).json({
@@ -1106,11 +1135,12 @@ exports.toggleActive = async (req, res, next) => {
     console.error("❌ toggleActive error:", error);
 
     // 🔴 Log unexpected error
-    await Logger.error({
-      user: req.user?._id,
-      action: "Toggle User Active",
-      status: "Failed",
-      details: error.message,
+    Logger.error("toggleUserActive", "Failed to toggle user active status", {
+      error,
+      context: {
+        userId: req.user?._id
+      },
+      req
     });
 
     next(error);
@@ -1120,11 +1150,24 @@ exports.toggleActive = async (req, res, next) => {
 // Get All Users with Search, Filter, Pagination, and Role-Based Access
 exports.getAllUsers = async (req, res, next) => {
   try {
-    await Logger.info("Fetching all users", { userId: req.user?._id, tenantId: req.tenantId, query: req.query });
+    Logger.info("getAllUsers", "Fetching all users", {
+      context: {
+        userId: req.user?._id,
+        tenantId: req.tenantId,
+        query: req.query
+      },
+      req
+    });
 
     const { error, value } = getAllUsersSchema.validate(req.query);
     if (error) {
-      await Logger.warning("Validation failed for getAllUsers", { error: error.details[0].message, userId: req.user?._id });
+      Logger.warn("getAllUsers", "Validation failed", {
+        context: {
+          error: error.details[0].message,
+          userId: req.user?._id
+        },
+        req
+      });
       return res.status(400).json({ message: error.details[0].message });
     }
 
@@ -1138,13 +1181,23 @@ exports.getAllUsers = async (req, res, next) => {
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
       ];
-      await Logger.info("Applied search filter", { search });
+      Logger.info("getAllUsers", "Applied search filter", {
+        context: {
+          search
+        },
+        req
+      });
     }
 
     // 🎭 Role filter
     if (role) {
       query.role = role;
-      await Logger.info("Applied role filter", { role });
+      Logger.info("getAllUsers", "Applied role filter", {
+        context: {
+          role
+        },
+        req
+      });
     }
 
     // ✅ Active/Inactive filter
@@ -1159,9 +1212,20 @@ exports.getAllUsers = async (req, res, next) => {
         if (req.user.role.toLowerCase() === "member") {
           query.role = { $nin: ["admin", "companyAdmin"] };
         }
-        await Logger.info("Tenant scoping applied for non-admin", { tenantId: req.tenantId, role: req.user.role });
+        Logger.info("getAllUsers", "Tenant scoping applied for non-admin", {
+          context: {
+            tenantId: req.tenantId,
+            role: req.user.role
+          },
+          req
+        });
       } else {
-        await Logger.warning("Access denied for non-admin user without tenant", { userId: req.user?._id });
+        Logger.warn("getAllUsers", "Access denied for non-admin user without tenant", {
+          context: {
+            userId: req.user?._id
+          },
+          req
+        });
         return res.status(403).json({
           message: "Access denied: No tenant associated with this user",
         });
@@ -1176,7 +1240,15 @@ exports.getAllUsers = async (req, res, next) => {
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
-    await Logger.info("Users fetched successfully", { total, page, limit, userId: req.user?._id });
+    Logger.info("getAllUsers", "Users fetched successfully", {
+      context: {
+        total,
+        page,
+        limit,
+        userId: req.user?._id
+      },
+      req
+    });
 
     res.status(200).json({
       total,
@@ -1186,7 +1258,13 @@ exports.getAllUsers = async (req, res, next) => {
       users,
     });
   } catch (err) {
-    await Logger.error("Error fetching all users", { error: err.message, stack: err.stack, userId: req.user?._id });
+    Logger.error("getAllUsers", "Error fetching users", {
+      error: err,
+      context: {
+        userId: req.user?._id
+      },
+      req
+    });
     next(err);
   }
 };
@@ -1194,11 +1272,24 @@ exports.getAllUsers = async (req, res, next) => {
 // Export User Data as PDF
 exports.getUserById = async (req, res, next) => {
   try {
-    await Logger.info("Fetching user by ID", { userId: req.user?._id, targetUserId: req.params.id });
+    Logger.info("getUserById", "Fetching user by ID", {
+      context: {
+        requesterId: req.user?._id,
+        targetUserId: req.params.id
+      },
+      req
+    });
+
 
     const { error } = idSchema.validate(req.params);
     if (error) {
-      await Logger.warning("Validation failed for getUserById", { error: error.details[0].message, userId: req.user?._id });
+      Logger.warn("getUserById", "Validation failed", {
+        context: {
+          error: error.details[0].message,
+          userId: req.user?._id
+        },
+        req
+      });
       return res.status(400).json({ message: error.details[0].message });
     }
 
@@ -1211,20 +1302,43 @@ exports.getUserById = async (req, res, next) => {
       .populate("customRoles department");
 
     if (!user) {
-      await Logger.warning("User not found", { targetUserId: req.params.id, userId: req.user?._id });
+      Logger.warn("getUserById", "User not found", {
+        context: {
+          targetUserId: req.params.id
+        },
+        req
+      });
       return res.status(404).json({ message: "User not found" });
     }
 
     if (req.user.role !== "admin" && user.tenant && req.tenantId !== user.tenant._id.toString()) {
-      await Logger.warning("Access denied due to tenant mismatch", { userId: req.user?._id, targetUserId: req.params.id });
+      Logger.warn("getUserById", "Access denied due to tenant mismatch", {
+        context: {
+          userId: req.user?._id,
+          targetUserId: req.params.id
+        },
+        req
+      });
       return res.status(403).json({ message: "Access denied: Wrong tenant" });
     }
 
-    await Logger.info("User fetched successfully", { userId: req.user?._id, targetUserId: req.params.id });
+    Logger.info("getUserById", "User fetched successfully", {
+      context: {
+        requesterId: req.user?._id,
+        targetUserId: req.params.id
+      },
+      req
+    });
     res.status(200).json({ success: true, user });
 
   } catch (err) {
-    await Logger.error("getUserById error", { message: err.message, stack: err.stack, userId: req.user?._id });
+    Logger.error("getUserById", "Error fetching user", {
+      error: err,
+      context: {
+        userId: req.user?._id
+      },
+      req
+    });
     next(err);
   }
 };
@@ -1232,11 +1346,23 @@ exports.getUserById = async (req, res, next) => {
 // PDF Export
 exports.exportUserDataPDF = async (req, res, next) => {
   try {
-    await Logger.info("Starting user PDF export", { requesterId: req.user?._id, targetUserId: req.params.id });
+    Logger.info("exportUserDataPDF", "Starting user PDF export", {
+      context: {
+        requesterId: req.user?._id,
+        targetUserId: req.params.id
+      },
+      req
+    });
 
     const { error } = idSchema.validate(req.params);
     if (error) {
-      await Logger.warning("Validation failed for exportUserDataPDF", { error: error.details[0].message, requesterId: req.user?._id });
+      Logger.warn("exportUserDataPDF", "Validation failed", {
+        context: {
+          error: error.details[0].message,
+          requesterId: req.user?._id
+        },
+        req
+      });
       return res.status(400).json({ message: error.details[0].message });
     }
 
@@ -1253,7 +1379,13 @@ exports.exportUserDataPDF = async (req, res, next) => {
       });
 
     if (!user) {
-      await Logger.warning("User not found for PDF export", { targetUserId: req.params.id, requesterId: req.user?._id });
+      Logger.warn("exportUserDataPDF", "User not found for PDF export", {
+        context: {
+          targetUserId: req.params.id,
+          requesterId: req.user?._id
+        },
+        req
+      });
       return res.status(404).json({ message: "User not found" });
     }
 
@@ -1269,25 +1401,54 @@ exports.exportUserDataPDF = async (req, res, next) => {
       );
 
       if (!hasPermission) {
-        await Logger.warning("Member attempted PDF export without permission", { requesterId: req.user._id });
+        Logger.warn("exportUserDataPDF", "Member attempted PDF export without permission", {
+          context: {
+            requesterId: req.user._id
+          },
+          req
+        });
         return res.status(403).json({ message: "Access denied: Permission 'user:export' required" });
       }
 
       if (user.tenant && user.tenant._id.toString() !== req.user.tenant._id.toString()) {
-        await Logger.warning("Member attempted PDF export for a different tenant", { requesterId: req.user._id, targetTenantId: user.tenant._id });
+        Logger.warn("exportUserDataPDF", "Member attempted PDF export for a different tenant", {
+          context: {
+            requesterId: req.user._id,
+            targetTenantId: user.tenant._id
+          },
+          req
+        });
         return res.status(403).json({ message: "Access denied: Cannot export users from a different tenant" });
       }
     } else if (req.user.role === "companyAdmin") {
       if (user.tenant && req.tenantId !== user.tenant._id.toString()) {
-        await Logger.warning("CompanyAdmin attempted PDF export for wrong tenant", { requesterId: req.user._id, targetTenantId: user.tenant._id });
+        Logger.warn("exportUserDataPDF", "CompanyAdmin attempted PDF export for wrong tenant", {
+          context: {
+            requesterId: req.user._id,
+            targetTenantId: user.tenant._id
+          },
+          req
+        });
         return res.status(403).json({ message: "Access denied: Wrong tenant" });
       }
     } else if (req.user.role !== "admin") {
-      await Logger.warning("Unauthorized role attempted PDF export", { requesterId: req.user._id, role: req.user.role });
+      Logger.warn("exportUserDataPDF", "Unauthorized role attempted PDF export", {
+        context: {
+          requesterId: req.user._id,
+          role: req.user.role
+        },
+        req
+      });
       return res.status(403).json({ message: "Access denied: Insufficient permissions" });
     }
 
-    await Logger.info("Generating PDF for user", { targetUserId: user._id, requesterId: req.user._id });
+    Logger.info("exportUserDataPDF", "Generating PDF for user", {
+      context: {
+        targetUserId: user._id,
+        requesterId: req.user._id
+      },
+      req
+    });
 
     const doc = new PDFDocument({ margin: 50 });
 
@@ -1348,10 +1509,23 @@ exports.exportUserDataPDF = async (req, res, next) => {
     });
 
     doc.end();
-    await Logger.info("PDF generation completed", { targetUserId: user._id, requesterId: req.user._id });
+    Logger.info("exportUserDataPDF", "PDF generated successfully", {
+      context: {
+        requesterId: req.user._id,
+        targetUserId: user._id
+      },
+      req
+    });
+
 
   } catch (err) {
-    await Logger.error("exportUserDataPDF error", { message: err.message, stack: err.stack, requesterId: req.user?._id });
+    Logger.error("exportUserDataPDF", "PDF export failed", {
+      error: err,
+      context: {
+        requesterId: req.user?._id
+      },
+      req
+    });
     next(err);
   }
 };
@@ -1367,8 +1541,12 @@ exports.sendNotification = async (req, res, next) => {
 
     if (bodyError || paramError) {
       // ⚠️ Agar validation fail ho jaye to warning log karo aur 400 bhej do
-      await Logger.warning("Invalid request for sendNotification", {
-        error: (bodyError || paramError).details[0].message
+      Logger.warn("sendNotification", "Invalid request for sendNotification", {
+        error: (bodyError || paramError).details[0].message,
+        context: {
+          requesterId: req.user?._id
+        },
+        req
       });
       return res.status(400).json({
         message: (bodyError || paramError).details[0].message
@@ -1382,16 +1560,24 @@ exports.sendNotification = async (req, res, next) => {
 
     // ❌ Step 3: Check agar user exist nahi karta
     if (!user) {
-      await Logger.warning("User not found in sendNotification", { userId: req.params.id });
+      Logger.warn("sendNotification", "User not found in sendNotification", {
+        context: {
+          userId: req.params.id
+        },
+        req
+      });
       return res.status(404).json({ message: "User not found" });
     }
 
     // 🔒 Step 4: Tenant level access control check
     // sirf admin ya same-tenant user hi doosre tenant ko message bhej sakta hai
     if (req.user.role !== "admin" && user.tenant && req.tenantId !== user.tenant.toString()) {
-      await Logger.warning("Access denied due to tenant mismatch", {
-        requesterId: req.user._id,
-        userTenant: user.tenant
+      Logger.warn("sendNotification", "Access denied due to tenant mismatch", {
+        context: {
+          requesterId: req.user._id,
+          userTenant: user.tenant
+        },
+        req
       });
       return res.status(403).json({ message: "Access denied: Wrong tenant" });
     }
@@ -1415,30 +1601,36 @@ exports.sendNotification = async (req, res, next) => {
         }
       });
 
-      await sendEmail({
+      sendEmail({
         to: user.email,
         subject,
         templateType: template.type,
         templateData
       });
 
-      await Logger.info(functionName, 'Notification email sent using template', {
-        userId: req.user?._id,
-        targetUserId: req.params.id,
-        userEmail: user.email,
-        subject,
-        templateType: "custom_notification"
+      Logger.info(functionName, "Notification email sent using template", {
+        context: {
+          userId: req.user?._id,
+          targetUserId: req.params.id,
+          userEmail: user.email,
+          subject,
+          templateType: "custom_notification"
+        },
+        req
       });
 
     } catch (templateError) {
       // 🔁 Step 6: Agar template fail ho jaye to fallback simple email se
-      await Logger.warning(functionName, 'Template email failed, using fallback', {
-        userId: req.user?._id,
-        targetUserId: req.params.id,
-        error: templateError.message
+      Logger.warn(functionName, "Template email failed, using fallback", {
+        context: {
+          userId: req.user?._id,
+          targetUserId: req.params.id,
+          error: templateError.message
+        },
+        req
       });
 
-      await sendEmail({
+      sendEmail({
         to: user.email,
         subject,
         html: `<p>${message}</p>`,
@@ -1450,9 +1642,9 @@ exports.sendNotification = async (req, res, next) => {
 
   } catch (err) {
     // 🧯 Step 8: Exception catch & error log
-    await Logger.error("sendNotification failed", {
-      message: err.message,
-      stack: err.stack
+    Logger.error("sendNotification", "Failed to send notification", {
+      error: err,
+      req
     });
     next(err);
   }
@@ -1464,14 +1656,25 @@ exports.updateMe = async (req, res, next) => {
     // ----------------- VALIDATION -----------------
     const { error } = updateMeSchema.validate(req.body);
     if (error) {
-      await Logger.warning("Validation failed in updateMe", { error: error.details[0].message, userId: req.user?._id });
+      Logger.warn("updateMe", "Validation failed", {
+        context: {
+          error: error.details[0].message,
+          userId: req.user?._id
+        },
+        req
+      });
       return res.status(400).json({ message: error.details[0].message });
     }
 
     // ----------------- JWT VERIFY -----------------
     const token = req.cookies?.accessToken;
     if (!token) {
-      await Logger.warning("No token provided in updateMe", { userId: req.user?._id });
+      Logger.warn("updateMe", "No token provided in updateMe", {
+        context: {
+          userId: req.user?._id
+        },
+        req
+      });
       return res.status(401).json({ message: "No token provided" });
     }
 
@@ -1479,7 +1682,13 @@ exports.updateMe = async (req, res, next) => {
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
-      await Logger.warning("Invalid/expired token in updateMe", { error: err.message });
+      Logger.warn("updateMe", "Invalid/expired token in updateMe", {
+        context: {
+          error: err.message,
+          userId: req.user?._id
+        },
+        req
+      });
       return res.status(401).json({ message: "Invalid or expired token" });
     }
 
@@ -1488,7 +1697,12 @@ exports.updateMe = async (req, res, next) => {
     // ----------------- FETCH USER -----------------
     const user = await User.findById(userId).populate("tenant");
     if (!user) {
-      await Logger.warning("User not found in updateMe", { userId });
+      Logger.warn("updateMe", "User not found in updateMe", {
+        context: {
+          userId
+        },
+        req
+      });
       return res.status(404).json({ message: "User not found" });
     }
 
@@ -1504,7 +1718,13 @@ exports.updateMe = async (req, res, next) => {
     if (req.body.tenant && user.role === "companyAdmin") {
       let tenant = await Tenant.findById(user.tenant?._id);
       if (!tenant) {
-        await Logger.warning("Tenant not found in updateMe", { userId, tenantId: user.tenant?._id });
+        Logger.warn("updateMe", "Tenant not found in updateMe", {
+          context: {
+            userId,
+            tenantId: user.tenant?._id
+          },
+          req
+        });
         return res.status(404).json({ message: "Tenant not found" });
       }
 
@@ -1519,7 +1739,13 @@ exports.updateMe = async (req, res, next) => {
       });
 
       await tenant.save();
-      await Logger.info("Tenant updated via updateMe", { tenantId: tenant._id, updatedBy: userId });
+      Logger.info("updateMe", "Tenant updated via updateMe", {
+        context: {
+          tenantId: tenant._id,
+          updatedBy: userId
+        },
+        req
+      });
     }
 
     // ----------------- AVATAR UPLOAD -----------------
@@ -1540,8 +1766,12 @@ exports.updateMe = async (req, res, next) => {
         public_id: uploadResult.public_id,
         url: uploadResult.secure_url
       };
-
-      await Logger.info("User avatar updated", { userId });
+      Logger.info("updateMe", "User avatar updated", {
+        context: {
+          userId
+        },
+        req
+      });
     }
 
     await user.save();
@@ -1565,10 +1795,19 @@ exports.updateMe = async (req, res, next) => {
       updatedAt: user.updatedAt,
     };
 
-    await Logger.info("Profile updated successfully", { userId: user._id });
+    Logger.info("updateMe", "Profile updated successfully", {
+      context: {
+        userId: user._id
+      },
+      req
+    });
+
     res.status(200).json({ message: "Profile updated successfully", user: safeUser });
   } catch (err) {
-    await Logger.error("[updateMe] error", { message: err.message, stack: err.stack });
+    Logger.error("updateMe", "UpdateMe failed", {
+      error: err,
+      req
+    });
     next(err);
   }
 };

@@ -4,7 +4,7 @@ const SurveyResponse = require("../models/SurveyResponse");
 const Action = require("../models/Action");
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 
 // Legacy functions (keep for compatibility)
 exports.getSurveyStats = async (req, res) => {
@@ -15,11 +15,14 @@ exports.getSurveyStats = async (req, res) => {
     const totalResponses = await SurveyResponse.countDocuments({ survey: surveyId });
 
     // ✅ Log success (status 200)
-    await Logger.info("getSurveyStats", "Survey stats fetched successfully", {
-      tenantId: tenant,
-      userId: req.user?._id,
-      surveyId,
-      totalResponses
+    Logger.info("getSurveyStats", "Survey stats fetched successfully", {
+      context: {
+        tenantId: tenant,
+        userId: req.user?._id,
+        surveyId,
+        totalResponses
+      },
+      req
     });
 
     return res.status(200).json({
@@ -30,11 +33,13 @@ exports.getSurveyStats = async (req, res) => {
 
   } catch (error) {
     // ❌ Log error (status 500)
-    await Logger.error("getSurveyStats", "Error fetching survey stats", {
-      tenantId: req.user?.tenant,
-      userId: req.user?._id,
-      message: error.message,
-      stack: error.stack
+    Logger.error("getSurveyStats", "Error fetching survey stats", {
+      error: error,
+      context: {
+        tenantId: req.user?.tenant,
+        userId: req.user?._id
+      },
+      req
     });
 
     return res.status(500).json({
@@ -57,11 +62,14 @@ exports.getTenantStats = async (req, res) => {
     const totalResponses = await SurveyResponse.countDocuments({ survey: { $in: surveyIds } });
 
     // ✅ Log on success (status 200)
-    await Logger.info("getTenantStats", "Tenant stats fetched successfully", {
-      tenantId,
-      userId,
-      totalSurveys,
-      totalResponses
+    Logger.info("getTenantStats", "Tenant stats fetched successfully", {
+      context: {
+        tenantId,
+        userId,
+        totalSurveys,
+        totalResponses
+      },
+      req
     });
 
     return res.status(200).json({
@@ -72,11 +80,13 @@ exports.getTenantStats = async (req, res) => {
 
   } catch (error) {
     // ❌ Log on error (status 500)
-    await Logger.error("getTenantStats", "Error fetching tenant stats", {
-      tenantId: req.user?.tenant,
-      userId: req.user?._id,
-      message: error.message,
-      stack: error.stack
+    Logger.error("getTenantStats", "Error fetching tenant stats", {
+      error: error,
+      context: {
+        tenantId: req.user?.tenant,
+        userId: req.user?._id
+      },
+      req
     });
 
     return res.status(500).json({
@@ -111,12 +121,15 @@ exports.getExecutiveDashboard = asyncHandler(async (req, res) => {
     };
 
     // ✅ Log on success (status 200)
-    await Logger.info("getExecutiveDashboard", "Executive dashboard data fetched successfully", {
-      tenantId,
-      userId,
-      range,
-      days,
-      dashboardData
+    Logger.info("getExecutiveDashboard", "Executive dashboard data fetched successfully", {
+      context: {
+        tenantId,
+        userId,
+        range,
+        days,
+        dashboardData
+      },
+      req
     });
 
     return res.status(200).json({
@@ -127,11 +140,13 @@ exports.getExecutiveDashboard = asyncHandler(async (req, res) => {
 
   } catch (error) {
     // ❌ Log on error (status 500)
-    await Logger.error("getExecutiveDashboard", "Error fetching executive dashboard data", {
-      tenantId: req.tenantId,
-      userId: req.user?._id,
-      message: error.message,
-      stack: error.stack
+    Logger.error("getExecutiveDashboard", "Error fetching executive dashboard data", {
+      error: error,
+      context: {
+        tenantId: req.tenantId || req.user?.tenant,
+        userId: req.user?._id
+      },
+      req
     });
 
     return res.status(500).json({
@@ -167,12 +182,15 @@ exports.getOperationalDashboard = asyncHandler(async (req, res) => {
     };
 
     // ✅ Log only on success (status 200)
-    await Logger.info("getOperationalDashboard", "Operational dashboard data fetched successfully", {
-      tenantId,
-      userId,
-      range,
-      days,
-      dashboardData
+    Logger.info("getOperationalDashboard", "Operational dashboard data fetched successfully", {
+      context: {
+        tenantId,
+        userId,
+        range,
+        days,
+        dashboardData
+      },
+      req
     });
 
     return res.status(200).json({
@@ -183,11 +201,13 @@ exports.getOperationalDashboard = asyncHandler(async (req, res) => {
 
   } catch (error) {
     // ❌ Log only on error (status 500)
-    await Logger.error("getOperationalDashboard", "Error fetching operational dashboard data", {
-      tenantId: req.tenantId,
-      userId: req.user?._id,
-      message: error.message,
-      stack: error.stack
+    Logger.error("getOperationalDashboard", "Error fetching operational dashboard data", {
+      error: error,
+      context: {
+        tenantId: req.tenantId || req.user?.tenant,
+        userId: req.user?._id
+      },
+      req
     });
 
     return res.status(500).json({
@@ -219,12 +239,15 @@ exports.getTrendsAnalytics = asyncHandler(async (req, res) => {
     };
 
     // ✅ Log only on success (status 200)
-    await Logger.info("getTrendsAnalytics", "Trends analytics fetched successfully", {
-      tenantId,
-      userId,
-      range,
-      days,
-      analyticsData
+    Logger.info("getTrendsAnalytics", "Trends analytics fetched successfully", {
+      context: {
+        tenantId,
+        userId,
+        range,
+        days,
+        analyticsData
+      },
+      req
     });
 
     return res.status(200).json({
@@ -235,11 +258,13 @@ exports.getTrendsAnalytics = asyncHandler(async (req, res) => {
 
   } catch (error) {
     // ❌ Log only on error (status 500)
-    await Logger.error("getTrendsAnalytics", "Error fetching trends analytics", {
-      tenantId: req.tenantId,
-      userId: req.user?._id,
-      message: error.message,
-      stack: error.stack
+    Logger.error("getTrendsAnalytics", "Error fetching trends analytics", {
+      error: error,
+      context: {
+        tenantId: req.tenantId || req.user?.tenant,
+        userId: req.user?._id
+      },
+      req
     });
 
     return res.status(500).json({
@@ -273,12 +298,15 @@ exports.getAlerts = asyncHandler(async (req, res) => {
     const alerts = await generateSmartAlerts(recentActions, recentResponses, tenantId);
 
     // ✅ Log only on success (status 200)
-    await Logger.info("getAlerts", "Alerts fetched successfully", {
-      tenantId,
-      userId,
-      recentActionsCount: recentActions.length,
-      recentResponsesCount: recentResponses.length,
-      alertsCount: alerts?.length || 0
+    Logger.info("getAlerts", "Alerts fetched successfully", {
+      context: {
+        tenantId,
+        userId,
+        recentActionsCount: recentActions.length,
+        recentResponsesCount: recentResponses.length,
+        alertsCount: alerts?.length || 0
+      },
+      req
     });
 
     return res.status(200).json({
@@ -289,11 +317,13 @@ exports.getAlerts = asyncHandler(async (req, res) => {
 
   } catch (error) {
     // ❌ Log only on error (status 500)
-    await Logger.error("getAlerts", "Error fetching alerts", {
-      tenantId: req.tenantId,
-      userId: req.user?._id,
-      message: error.message,
-      stack: error.stack
+    Logger.error("getAlerts", "Error fetching alerts", {
+      error: error,
+      context: {
+        tenantId: req.tenantId || req.user?.tenant,
+        userId: req.user?._id
+      },
+      req
     });
 
     return res.status(500).json({
@@ -385,23 +415,28 @@ exports.calculateCustomerSatisfactionIndex = async (tenantId, startDate) => {
     };
 
     // ✅ Log success
-    await Logger.info("calculateCustomerSatisfactionIndex", "CSI calculated successfully", {
-      tenantId,
-      startDate,
-      overall: result.overall,
-      totalLocations: result.locations.length,
-      totalServices: result.services.length
+    Logger.info("calculateCustomerSatisfactionIndex", "CSI calculated successfully", {
+      context: {
+        tenantId,
+        startDate,
+        overall: result.overall,
+        totalLocations: result.locations.length,
+        totalServices: result.services.length
+      },
+      req
     });
 
     return result;
 
   } catch (error) {
     // ❌ Log error
-    await Logger.error("calculateCustomerSatisfactionIndex", "Error calculating CSI", {
-      tenantId,
-      startDate,
-      message: error.message,
-      stack: error.stack
+    Logger.error("calculateCustomerSatisfactionIndex", "Error calculating CSI", {
+      error: error,
+      context: {
+        tenantId,
+        startDate
+      },
+      req
     });
 
     return { overall: 4.0, trend: 0, locations: [], services: [] };
@@ -470,24 +505,29 @@ exports.calculateNPSScore = async (tenantId, startDate) => {
     }
 
     // ✅ Log success
-    await Logger.info("calculateNPSScore", "NPS calculated successfully", {
-      tenantId,
-      startDate,
-      current: result.current,
-      promoters: result.promoters,
-      passives: result.passives,
-      detractors: result.detractors
+    Logger.info("calculateNPSScore", "NPS calculated successfully", {
+      context: {
+        tenantId,
+        startDate,
+        current: result.current,
+        promoters: result.promoters,
+        passives: result.passives,
+        detractors: result.detractors
+      },
+      req
     });
 
     return result;
 
   } catch (error) {
     // ❌ Log error
-    await Logger.error("calculateNPSScore", "Error calculating NPS", {
-      tenantId,
-      startDate,
-      message: error.message,
-      stack: error.stack
+    Logger.error("calculateNPSScore", "Error calculating NPS", {
+      error: error,
+      context: {
+        tenantId,
+        startDate
+      },
+      req
     });
 
     return { current: 42, trend: 5, promoters: 156, detractors: 34, passives: 98 };
@@ -521,22 +561,27 @@ exports.calculateResponseRate = async (tenantId, startDate) => {
     };
 
     // ✅ Log success
-    await Logger.info("calculateResponseRate", "Response rate calculated successfully", {
-      tenantId,
-      startDate,
-      current: result.current,
-      completed: result.completed,
-      total: result.total
+    Logger.info("calculateResponseRate", "Response rate calculated successfully", {
+      context: {
+        tenantId,
+        startDate,
+        current: result.current,
+        completed: result.completed,
+        total: result.total
+      },
+      req
     });
 
     return result;
   } catch (error) {
     // ❌ Log error
-    await Logger.error("calculateResponseRate", "Error calculating response rate", {
-      tenantId,
-      startDate,
-      message: error.message,
-      stack: error.stack
+    Logger.error("calculateResponseRate", "Error calculating response rate", {
+      error: error,
+      context: {
+        tenantId,
+        startDate
+      },
+      req
     });
 
     return { current: 68, trend: -2, total: 1245, completed: 847 };
@@ -559,18 +604,23 @@ exports.calculateAlertCounts = async (tenantId) => {
     });
 
     // ✅ Log success
-    await Logger.info("calculateAlertCounts", "Alert counts calculated successfully", {
-      tenantId,
-      counts
+    Logger.info("calculateAlertCounts", "Alert counts calculated successfully", {
+      context: {
+        tenantId,
+        counts
+      },
+      req
     });
 
     return counts;
   } catch (error) {
     // ❌ Log error
-    await Logger.error("calculateAlertCounts", "Error calculating alert counts", {
-      tenantId,
-      message: error.message,
-      stack: error.stack
+    Logger.error("calculateAlertCounts", "Error calculating alert counts", {
+      error: error,
+      context: {
+        tenantId
+      },
+      req
     });
 
     return { critical: 3, warning: 12, info: 8 };
@@ -586,9 +636,12 @@ exports.calculateSLAMetrics = async (tenantId, startDate) => {
       const data = { averageResponseTime: "2.4 hours", onTimeResolution: 87, overdueActions: 0 };
 
       // ✅ Log success
-      await Logger.info("calculateSLAMetrics", "SLA metrics calculated successfully", {
-        tenantId,
-        data
+      Logger.info("calculateSLAMetrics", "SLA metrics calculated successfully", {
+        context: {
+          tenantId,
+          data
+        },
+        req
       });
 
       return data;
@@ -618,18 +671,22 @@ exports.calculateSLAMetrics = async (tenantId, startDate) => {
     };
 
     // ✅ Log success
-    await Logger.info("calculateSLAMetrics", "SLA metrics calculated successfully", {
-      tenantId,
-      result
+    Logger.info("calculateSLAMetrics", "SLA metrics calculated successfully", {
+      context: {
+        tenantId,
+        result // ya data — dono mein se jo actual variable ho, yahan 'result' rakha assuming latest
+      },
+      req
     });
-
     return result;
   } catch (error) {
     // ❌ Log error
-    await Logger.error("calculateSLAMetrics", "Error calculating SLA metrics", {
-      tenantId,
-      message: error.message,
-      stack: error.stack
+    Logger.error("calculateSLAMetrics", "Error calculating SLA metrics", {
+      error: error,
+      context: {
+        tenantId
+      },
+      req
     });
 
     return { averageResponseTime: "2.4 hours", onTimeResolution: 87, overdueActions: 15 };
@@ -661,14 +718,14 @@ exports.getSatisfactionTrend = async (tenantId, startDate, days) => {
   const intervals = Math.min(days / 5, 12);
   const labels = [];
   const values = [];
-  
+
   for (let i = intervals - 1; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - (i * Math.floor(days / intervals)));
     labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
     values.push(Math.random() * 1 + 3.5);
   }
-  
+
   return { labels, values };
 };
 
@@ -676,13 +733,13 @@ exports.getVolumeTrend = async (tenantId, startDate, days) => {
   const labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
   const surveys = labels.map(() => Math.floor(Math.random() * 100) + 100);
   const responses = surveys.map(s => Math.floor(s * (0.6 + Math.random() * 0.3)));
-  
+
   return { labels, surveys, responses };
 };
 
 exports.generateSmartAlerts = async (actions, responses, tenantId) => {
   const alerts = [];
-  
+
   const highPriorityActions = actions.filter(a => a.priority === 'high');
   if (highPriorityActions.length > 0) {
     alerts.push({
@@ -694,7 +751,7 @@ exports.generateSmartAlerts = async (actions, responses, tenantId) => {
       action: 'Review and assign urgent actions to appropriate teams'
     });
   }
-  
+
   const lowRatingResponses = responses.filter(r => r.rating && r.rating <= 2);
   if (lowRatingResponses.length >= 3) {
     alerts.push({
@@ -706,7 +763,7 @@ exports.generateSmartAlerts = async (actions, responses, tenantId) => {
       action: 'Investigate service quality and address customer concerns'
     });
   }
-  
+
   if (responses.length > 20) {
     alerts.push({
       id: 'volume-spike-' + Date.now(),
@@ -717,6 +774,6 @@ exports.generateSmartAlerts = async (actions, responses, tenantId) => {
       action: 'Monitor for patterns and prepare for increased feedback processing'
     });
   }
-  
+
   return alerts;
 };

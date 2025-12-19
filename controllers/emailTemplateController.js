@@ -211,7 +211,7 @@
 // };
 // controllers/emailTemplateController.js
 const EmailTemplate = require("../models/EmailTemplate");
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 
 const extractVariables = (body) => {
     if (!body) return [];
@@ -294,7 +294,13 @@ exports.createTemplate = async (req, res) => {
 
         console.log("✅ Template created successfully:", template);
 
-        await Logger.info('createTemplate', 'Email template created', { templateId: template._id, name });
+        Logger.info("createTemplate", "Email template created", {
+            context: {
+                templateId: template._id,
+                name
+            },
+            req
+        });
 
         res.status(201).json({
             success: true,
@@ -304,7 +310,11 @@ exports.createTemplate = async (req, res) => {
 
     } catch (error) {
         console.error('createTemplate error:', error);
-        await Logger.error('createTemplate', 'Failed to create email template', { message: error.message, stack: error.stack });
+        Logger.error("createTemplate", "Failed to create email template", {
+            error,
+            context: {},
+            req
+        });
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -325,7 +335,12 @@ exports.getTemplates = async (req, res) => {
         const activeCount = await EmailTemplate.countDocuments({ isActive: true });
         const inactiveCount = await EmailTemplate.countDocuments({ isActive: false });
 
-        await Logger.info('getTemplates', 'Fetched all email templates', { total: templates.length });
+        Logger.info("getTemplates", "Fetched all email templates", {
+            context: {
+                total: templates.length
+            },
+            req
+        });
 
         res.status(200).json({
             success: true,
@@ -338,7 +353,12 @@ exports.getTemplates = async (req, res) => {
         });
     } catch (error) {
         console.error('getTemplates error:', error);
-        await Logger.error('getTemplates', 'Failed to fetch email templates', { message: error.message, stack: error.stack });
+        Logger.error("getTemplates", "Failed to fetch email templates", {
+            error,
+            context: {},
+            req
+        });
+
         res.status(500).json({
             success: false,
             message: error.message
@@ -357,18 +377,18 @@ exports.getTemplateById = async (req, res) => {
             });
         }
 
-        await Logger.info('getTemplateById', 'Fetched email template by ID', { templateId: template._id });
-
-        res.status(200).json({
-            success: true,
-            data: template
+        Logger.info("getTemplateById", "Fetched email template by ID", {
+            context: {
+                templateId: template._id
+            },
+            req
         });
     } catch (error) {
         console.error('getTemplateById error:', error);
-        await Logger.error('getTemplateById', 'Failed to fetch email template', { message: error.message, stack: error.stack });
-        res.status(500).json({
-            success: false,
-            message: error.message
+        Logger.error("getTemplateById", "Failed to fetch email template", {
+            error,
+            context: {},
+            req
         });
     }
 };
@@ -423,10 +443,6 @@ exports.updateTemplate = async (req, res) => {
     try {
         const { name, subject, body, description, isActive, type } = req.body;
 
-        console.log("📥 Entering updateTemplate");
-        console.log("📥 Request Params:", req.params);
-        console.log("📥 Request Body:", req.body);
-
         const template = await EmailTemplate.findById(req.params.id);
         if (!template) {
             return res.status(404).json({ success: false, message: "Template not found" });
@@ -460,9 +476,12 @@ exports.updateTemplate = async (req, res) => {
             { new: true, runValidators: true }
         );
 
-        console.log("✅ Template updated successfully:", updatedTemplate);
-
-        await Logger.info('updateTemplate', 'Email template updated', { templateId: updatedTemplate._id });
+        Logger.info("updateTemplate", "Email template updated", {
+            context: {
+                templateId: updatedTemplate._id
+            },
+            req
+        });
 
         res.status(200).json({
             success: true,
@@ -472,7 +491,11 @@ exports.updateTemplate = async (req, res) => {
 
     } catch (error) {
         console.error('updateTemplate error:', error);
-        await Logger.error('updateTemplate', 'Failed to update email template', { message: error.message, stack: error.stack });
+        Logger.error("updateTemplate", "Failed to update email template", {
+            error,
+            context: {},
+            req
+        });
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -487,15 +510,19 @@ exports.deleteTemplate = async (req, res) => {
 
         await EmailTemplate.findByIdAndDelete(req.params.id);
 
-        await Logger.info('deleteTemplate', 'Email template deleted', { templateId: req.params.id });
-
-        res.status(200).json({
-            success: true,
-            message: "Template deleted successfully"
+        Logger.info("deleteTemplate", "Email template deleted", {
+            context: {
+                templateId: req.params.id
+            },
+            req
         });
     } catch (error) {
         console.error('deleteTemplate error:', error);
-        await Logger.error('deleteTemplate', 'Failed to delete email template', { message: error.message, stack: error.stack });
+        Logger.error("deleteTemplate", "Failed to delete email template", {
+            error,
+            context: {},
+            req
+        });
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -511,7 +538,12 @@ exports.toggleTemplateStatus = async (req, res) => {
         template.isActive = !template.isActive;
         await template.save();
 
-        await Logger.info('toggleTemplateStatus', `Template ${template.isActive ? 'activated' : 'deactivated'}`, { templateId: template._id });
+        Logger.info("toggleTemplateStatus", `Template ${template.isActive ? 'activated' : 'deactivated'}`, {
+            context: {
+                templateId: template._id
+            },
+            req
+        });
 
         res.status(200).json({
             success: true,
@@ -520,7 +552,11 @@ exports.toggleTemplateStatus = async (req, res) => {
         });
     } catch (error) {
         console.error('toggleTemplateStatus error:', error);
-        await Logger.error('toggleTemplateStatus', 'Failed to toggle email template status', { message: error.message, stack: error.stack });
+        Logger.error("toggleTemplateStatus", "Failed to toggle email template status", {
+            error,
+            context: {},
+            req
+        });
         res.status(500).json({ success: false, message: error.message });
     }
 };

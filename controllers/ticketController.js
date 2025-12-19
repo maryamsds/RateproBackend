@@ -9,7 +9,7 @@ const Joi = require("joi");
 const fs = require("fs");
 const path = require("path");
 const { v4: uuidv4 } = require("uuid");
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 const EmailTemplate = require("../models/EmailTemplate");
 
 // Validation Schemas
@@ -105,7 +105,10 @@ exports.createTicket = async (req, res, next) => {
                     if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
                 });
 
-                await Logger.error("createTicket", "File upload failed", { message: uploadError.message });
+                Logger.error("createTicket", "File upload failed", {
+                    context: { message: uploadError.message },
+                    req
+                });
                 return res.status(500).json({ success: false, message: "Failed to upload attachments" });
             }
         }
@@ -193,27 +196,31 @@ exports.createTicket = async (req, res, next) => {
             });
 
             // 4) Send email using template
-            await sendEmail({
+            sendEmail({
                 to: adminEmails,
                 subject: `New Support Ticket: ${subject}`,
                 templateType: template.type,
                 templateData,
             });
 
-            await Logger.info("createTicket", "Support ticket email sent to admin using template", {
-                adminCount: adminEmails.length,
-                subject,
-                templateType: "support_To_Admin"
+            ogger.info("createTicket", "Support ticket email sent to admin", {
+                context: {
+                    adminCount: adminEmails.length,
+                    subject,
+                    templateType: "support_To_Admin"
+                },
+                req
             });
 
         } catch (emailError) {
 
             // 5) Fallback to simple HTML email
-            await Logger.warning("createTicket", "Template failed, sending fallback email", {
-                message: emailError.message,
+            Logger.warn("createTicket", "Template failed, using fallback email", {
+                context: { message: emailError.message },
+                req
             });
 
-            await sendEmail({
+            sendEmail({
                 to: adminEmails,
                 subject: `New Support Ticket: ${subject}`,
                 html: `
@@ -228,10 +235,13 @@ exports.createTicket = async (req, res, next) => {
             });
         }
 
-        await Logger.info("createTicket", "Support ticket created successfully", {
-            ticketId: newTicket._id,
-            createdBy,
-            tenantId,
+        Logger.info("createTicket", "Support ticket created successfully", {
+            context: {
+                ticketId: newTicket._id,
+                createdBy,
+                tenantId
+            },
+            req
         });
 
         res.status(201).json({
@@ -247,11 +257,10 @@ exports.createTicket = async (req, res, next) => {
             });
         }
 
-        await Logger.error("createTicket", "Unexpected error while creating ticket", {
-            message: error.message,
-            stack: error.stack,
+        Logger.error("createTicket", "Unexpected error while creating ticket", {
+            error,
+            req
         });
-
         next(error);
     }
 };
@@ -262,11 +271,12 @@ exports.getTickets = async (req, res, next) => {
         // Validate query parameters
         const { error, value } = querySchema.validate(req.query);
         if (error) {
-            await Logger.error("getTickets", "Validation failed", {
-                user: req.user._id,
-                action: "Get Tickets",
-                status: "Failed",
-                details: error.details[0].message,
+            Logger.warn("getTickets", "Validation failed", {
+                context: {
+                    userId: req.user._id,
+                    message: error.details[0].message
+                },
+                req
             });
             return res.status(400).json({
                 success: false,
@@ -318,11 +328,12 @@ exports.getTickets = async (req, res, next) => {
         const hasPrev = page > 1;
 
         // ✅ Success log (only when response is 200)
-        await Logger.info({
-            user: req.user._id,
-            action: "Get Tickets",
-            status: "Success",
-            details: `Fetched ${tickets.length} tickets`,
+        Logger.info("getTickets", "Tickets fetched successfully", {
+            context: {
+                userId: req.user._id,
+                total: tickets.length
+            },
+            req
         });
 
         res.status(200).json({
@@ -346,11 +357,9 @@ exports.getTickets = async (req, res, next) => {
         console.error("❌ Error fetching tickets:", error);
 
         // ❌ Error log
-        await Logger.error("getTickets", "Failed to fetch tickets", {
-            user: req.user?._id,
-            action: "Get Tickets",
-            status: "Failed",
-            details: error.message,
+        Logger.error("getTickets", "Failed to fetch tickets", {
+            error,
+            req
         });
 
         next(error);
@@ -429,11 +438,12 @@ exports.getTicketById = async (req, res, next) => {
         };
 
         // ✅ Success log (only on success response)
-        await Logger.info({
-            user: req.user._id,
-            action: "Get Ticket By ID",
-            status: "Success",
-            details: `Fetched ticket successfully (ID: ${ticket._id})`,
+        Logger.info("getTicketById", "Ticket fetched successfully", {
+            context: {
+                userId: req.user._id,
+                ticketId: ticket._id
+            },
+            req
         });
 
         res.status(200).json({
@@ -444,23 +454,16 @@ exports.getTicketById = async (req, res, next) => {
         console.error("❌ Error getting ticket:", error);
 
         // ❌ Log only unexpected (caught) errors
-        await Logger.error({
-            user: req.user?._id,
-            action: "Get Ticket By ID",
-            status: "Failed",
-            details: error.message,
+        Logger.error("getTicketById", "Failed to fetch ticket", {
+            error,
+            req
         });
-
         next(error);
     }
 };
 
 // ✅ Update Ticket
 exports.updateTicket = async (req, res, next) => {
-    console.log("\x1b[35m[DEBUG] updateTicket CALLED\x1b[0m");
-    console.log("Params ID:", req.params.id);
-    console.log("Body:", req.body);
-    console.log("User:", req.user);
     try {
 
         // Validate ticket ID
@@ -607,7 +610,7 @@ exports.updateTicket = async (req, res, next) => {
                 });
 
                 // 3) Send templated email
-                await sendEmail({
+                sendEmail({
                     to: userEmail,
                     subject: `Ticket Status Updated: ${updatedTicket.subject}`,
                     templateType: template.type,
@@ -618,7 +621,7 @@ exports.updateTicket = async (req, res, next) => {
                 console.error("❌ Status change email error:", emailError);
 
                 // 4) Fallback simple email
-                await sendEmail({
+                sendEmail({
                     to: existingTicket.contactEmail || updatedTicket.createdBy?.email,
                     subject: `Ticket Status Updated: ${updatedTicket.subject}`,
                     html: `
@@ -636,15 +639,13 @@ exports.updateTicket = async (req, res, next) => {
         }
 
         // ✅ Success log (only if response 200/201)
-        await Logger.info(
-            "updateTicket",
-            `Ticket updated successfully (ID: ${ticketId})`,
-            {
-                user: req.user._id,
-                action: "Update Ticket",
-                status: "Success"
-            }
-        );
+        Logger.info("updateTicket", "Ticket updated successfully", {
+            context: {
+                userId: req.user._id,
+                ticketId
+            },
+            req
+        });
 
         res.status(200).json({
             success: true,
@@ -655,24 +656,16 @@ exports.updateTicket = async (req, res, next) => {
         console.error("❌ Error updating ticket:", error);
 
         // 🔴 Only catch errors are logged
-        await Logger.error({
-            user: req.user?._id,
-            action: "Update Ticket",
-            status: "Failed",
-            details: error.message,
+        Logger.error("updateTicket", "Failed to update ticket", {
+            error,
+            req
         });
-
         next(error);
     }
 };
 
 // ✅ Update Ticket Status (Separate endpoint for status-only updates)
 exports.updateTicketStatus = async (req, res) => {
-    console.log("\x1b[36m[DEBUG] updateTicketStatus CALLED\x1b[0m");
-    console.log("Params ID:", req.params.id);
-    console.log("Body:", req.body);
-    console.log("User:", req.user);
-
     try {
         const ticketId = req.params.id;
         const { status } = req.body;
@@ -775,7 +768,7 @@ exports.updateTicketStatus = async (req, res) => {
                         });
 
                         // Send template email
-                        await sendEmail({
+                        sendEmail({
                             to: userEmail,
                             subject: `Ticket Status Updated: ${ticket.subject}`,
                             templateType: template.type,
@@ -789,7 +782,7 @@ exports.updateTicketStatus = async (req, res) => {
                 console.error("❌ Status change email error:", emailError);
 
                 // Fallback simple email
-                await sendEmail({
+                sendEmail({
                     to: ticket.contactEmail || ticket.createdBy?.email,
                     subject: `Ticket Status Updated: ${ticket.subject}`,
                     html: `
@@ -807,18 +800,15 @@ exports.updateTicketStatus = async (req, res) => {
         }
 
         // 🔹 SUCCESS LOG
-        await Logger.info(
-            "updateTicketStatus",
-            `Ticket status updated successfully`,
-            {
-                user: req.user._id,
-                ticket: ticket._id,
+        Logger.info("updateTicketStatus", "Ticket status updated successfully", {
+            context: {
+                userId: req.user._id,
+                ticketId: ticket._id,
                 oldStatus,
-                newStatus,
-                action: "Update Ticket Status",
-                status: "Success",
-            }
-        );
+                newStatus
+            },
+            req
+        });
 
         return res.json({
             success: true,
@@ -830,15 +820,10 @@ exports.updateTicketStatus = async (req, res) => {
         console.error("Update ticket status error:", error);
 
         // 🔹 ERROR LOG
-        await Logger.error(
-            "updateTicketStatus",
-            error.message,
-            {
-                user: req.user?._id,
-                action: "Update Ticket Status",
-                status: "Failed"
-            }
-        );
+        Logger.error("updateTicketStatus", "Failed to update ticket status", {
+            error,
+            req
+        });
 
         return res.status(500).json({ message: "Internal server error" });
     }
@@ -943,7 +928,7 @@ exports.deleteTicket = async (req, res, next) => {
                         }
                     });
 
-                    await sendEmail({
+                    sendEmail({
                         to: userEmail,
                         subject: `Ticket Deleted: ${ticket.subject}`,
                         templateType: template.type,
@@ -957,7 +942,7 @@ exports.deleteTicket = async (req, res, next) => {
             console.error("❌ Error sending deletion email:", emailError);
 
             // Fallback simple email
-            await sendEmail({
+            sendEmail({
                 to: ticket.contactEmail,
                 subject: `Ticket Deleted: ${ticket.subject}`,
                 html: `
@@ -972,11 +957,12 @@ exports.deleteTicket = async (req, res, next) => {
         }
 
         // Step 7: Log success
-        await Logger.info({
-            user: req.user._id,
-            action: "Delete Ticket",
-            status: "Success",
-            details: `Ticket deleted successfully (ID: ${ticketId})`,
+        Logger.info("deleteTicket", "Ticket deleted successfully", {
+            context: {
+                userId: req.user._id,
+                ticketId
+            },
+            req
         });
 
         // Step 8: Response to client
@@ -987,11 +973,9 @@ exports.deleteTicket = async (req, res, next) => {
     } catch (error) {
         console.error("❌ Unexpected error in deleteTicket:", error);
 
-        await Logger.error({
-            user: req.user?._id,
-            action: "Delete Ticket",
-            status: "Failed",
-            details: error.message,
+        Logger.error("deleteTicket", "Failed to delete ticket", {
+            error,
+            req
         });
 
         next(error);
@@ -1067,11 +1051,9 @@ exports.getTicketStats = async (req, res, next) => {
         };
 
         // ✅ Success log (only on 200)
-        await Logger.info({
-            user: req.user._id,
-            action: "Get Ticket Stats",
-            status: "Success",
-            details: `Fetched ticket statistics successfully`,
+        Logger.info("getTicketStats", "Ticket statistics fetched", {
+            context: { userId: req.user._id },
+            req
         });
 
         res.status(200).json({
@@ -1081,11 +1063,9 @@ exports.getTicketStats = async (req, res, next) => {
     } catch (error) {
         console.error("❌ Error getting ticket stats:", error);
 
-        await Logger.error({
-            user: req.user?._id,
-            action: "Get Ticket Stats",
-            status: "Failed",
-            details: error.message,
+        Logger.error("getTicketStats", "Failed to fetch ticket statistics", {
+            error,
+            req
         });
 
         next(error);
@@ -1148,11 +1128,12 @@ exports.addComment = async (req, res) => {
         await ticket.save();
 
         // ✅ Success log (only on 201)
-        await Logger.info({
-            user: req.user._id,
-            action: "Add Comment",
-            status: "Success",
-            details: `Comment added to ticket ID: ${ticketId}`,
+        Logger.info("addTicketComment", "Comment added to ticket", {
+            context: {
+                userId: req.user._id,
+                ticketId
+            },
+            req
         });
 
         res.status(201).json({
@@ -1164,11 +1145,9 @@ exports.addComment = async (req, res) => {
         console.error("❌ [addComment] Error adding comment:", error);
 
         // 🔴 Only catch block logs
-        await Logger.error({
-            user: req.user?._id,
-            action: "Add Comment",
-            status: "Failed",
-            details: error.message,
+        Logger.error("addTicketComment", "Failed to add comment", {
+            error,
+            req
         });
 
         res.status(500).json({ success: false, message: "Internal server error" });
@@ -1190,11 +1169,12 @@ exports.getComments = async (req, res) => {
         );
 
         // ✅ Success log (only on 200)
-        await Logger.info({
-            user: req.user?._id,
-            action: "Get Comments",
-            status: "Success",
-            details: `Fetched comments for ticket ID: ${req.params.id}`,
+        Logger.info("getTicketComments", "Ticket comments fetched", {
+            context: {
+                userId: req.user?._id,
+                ticketId: req.params.id
+            },
+            req
         });
 
         res.status(200).json({ success: true, data: comments });
@@ -1202,11 +1182,9 @@ exports.getComments = async (req, res) => {
         console.error("❌ Error getting comments:", error);
 
         // 🔴 Only catch block logs
-        await Logger.error({
-            user: req.user?._id,
-            action: "Get Comments",
-            status: "Failed",
-            details: error.message,
+        Logger.error("getTicketComments", "Failed to get comments", {
+            error,
+            req
         });
 
         res.status(500).json({ success: false, message: "Internal server error" });

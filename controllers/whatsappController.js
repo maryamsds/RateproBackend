@@ -52,10 +52,10 @@
 // controllers/whatsappController.js
 const WhatsAppSetting = require('../models/WhatsAppSetting');
 const Joi = require('joi');
-const Logger = require("../utils/auditLog");
+const Logger = require("../utils/logger");
 
 const schema = Joi.object({
-  provider: Joi.string().valid('twilio','meta').required(),
+  provider: Joi.string().valid('twilio', 'meta').required(),
   twilio: Joi.object({
     accountSid: Joi.string().allow('', null),
     authToken: Joi.string().allow('', null),
@@ -74,31 +74,51 @@ exports.upsertWhatsAppSetting = async (req, res, next) => {
   try {
     const { error, value } = schema.validate(req.body);
     if (error) {
-      await Logger.warning("WhatsApp setting validation failed", { error: error.details[0].message, body: req.body, userId: req.user?._id });
+      Logger.warn("saveWhatsAppSetting", "Validation failed", {
+        context: {
+          error: error.details[0].message,
+          body: req.body,
+          userId: req.user?._id
+        },
+        req
+      });
       return res.status(400).json({ message: error.details[0].message });
     }
 
     const tenantId = req.tenantId;
     if (!tenantId) {
-      await Logger.warning("WhatsApp setting attempt without tenant", { userId: req.user?._id });
-      return res.status(403).json({ message: 'No tenant' });
+      Logger.warn("saveWhatsAppSetting", "Attempt without tenant", {
+        context: { userId: req.user?._id },
+        req
+      }); return res.status(403).json({ message: 'No tenant' });
     }
 
     let setting = await WhatsAppSetting.findOne({ tenant: tenantId });
     if (!setting) {
-      await Logger.info("Creating new WhatsApp setting", { tenantId, userId: req.user?._id });
-      setting = new WhatsAppSetting(Object.assign({}, value, { tenant: tenantId, createdBy: req.user._id }));
+      Logger.info("saveWhatsAppSetting", "Creating new WhatsApp setting", {
+        context: { tenantId, userId: req.user?._id },
+        req
+      }); setting = new WhatsAppSetting(Object.assign({}, value, { tenant: tenantId, createdBy: req.user._id }));
     } else {
-      await Logger.info("Updating existing WhatsApp setting", { tenantId, userId: req.user?._id });
+      Logger.info("saveWhatsAppSetting", "Updating existing WhatsApp setting", {
+        context: { tenantId, userId: req.user?._id },
+        req
+      });
       Object.assign(setting, value);
     }
 
     await setting.save();
-    await Logger.info("WhatsApp setting saved successfully", { tenantId, userId: req.user?._id, settingId: setting._id });
+    Logger.info("saveWhatsAppSetting", "WhatsApp setting saved successfully", {
+      context: { tenantId, userId: req.user?._id, settingId: setting._id },
+      req
+    });
 
     res.status(200).json({ message: 'WhatsApp settings saved', setting });
   } catch (err) {
-    await Logger.error("Error saving WhatsApp setting", { error: err.message, stack: err.stack });
+    Logger.error("saveWhatsAppSetting", "Error saving WhatsApp setting", {
+      error: err,
+      req
+    });
     next(err);
   }
 };
@@ -107,17 +127,33 @@ exports.upsertWhatsAppSetting = async (req, res, next) => {
 exports.getWhatsAppSetting = async (req, res, next) => {
   try {
     const tenantId = req.tenantId;
-    await Logger.info("Fetching WhatsApp setting", { tenantId, userId: req.user?._id });
+    Logger.info("getWhatsAppSetting", "Fetching WhatsApp setting", {
+      context: { tenantId, userId: req.user?._id },
+      req
+    });
     let setting = await WhatsAppSetting.findOne({ tenant: tenantId });
     if (!setting) {
-      await Logger.warning("No WhatsApp settings found", { tenantId, userId: req.user?._id });
+      Logger.warn("getWhatsAppSetting", "No WhatsApp settings found", {
+        context: { tenantId, userId: req.user?._id },
+        req
+      });
       return res.status(404).json({ message: 'No settings found' });
     }
 
-    await Logger.info("WhatsApp setting retrieved successfully", { tenantId, userId: req.user?._id, settingId: setting._id });
+    Logger.info("getWhatsAppSetting", "WhatsApp setting retrieved successfully", {
+      context: {
+        tenantId,
+        userId: req.user?._id,
+        settingId: setting._id
+      },
+      req
+    });
     res.status(200).json({ setting });
   } catch (err) {
-    await Logger.error("Error fetching WhatsApp setting", { error: err.message, stack: err.stack, userId: req.user?._id });
+    Logger.error("getWhatsAppSetting", "Error fetching WhatsApp setting", {
+      error: err,
+      req
+    });
     next(err);
   }
 };
