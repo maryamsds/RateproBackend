@@ -114,6 +114,14 @@ const ContactSchema = new mongoose.Schema({
     index: true,
   },
 
+  contactCategories: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "UserCategory",
+      index: true,
+    },
+  ],
+
   enrichment: {
     country: String,
     countryCode: String,

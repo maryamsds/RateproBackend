@@ -1,4 +1,4 @@
-// RateproBackend/models/SurveyInvites.js
+// RateproBackend/models/SurveyInvite.js
 const mongoose = require("mongoose");
 
 const surveyInviteSchema = new mongoose.Schema({
@@ -39,6 +39,13 @@ const surveyInviteSchema = new mongoose.Schema({
     enum: ["sent", "opened", "responded"],
     default: "sent"
   },
+
+  expiresAt: {
+    type: Date,
+    default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+  },
+  maxAttempts: { type: Number, default: 1 },
+  attemptCount: { type: Number, default: 0 },
 
   respondedAt: {
     type: Date

@@ -7,7 +7,6 @@ const { allowRoles } = require("../middlewares/roleMiddleware");
 const { allowPermission } = require("../middlewares/permissionMiddleware");
 const { tenantCheck } = require("../middlewares/tenantMiddleware");
 const {
-  createSurvey,
   getAllSurveys,
   getSurveyById,
   getPublicSurveys,
@@ -31,11 +30,14 @@ const {
   getExecutiveDashboard,
   getOperationalDashboard,
 } = require("../controllers/dashboardController");
+const { surveyResponseLimiter, anonymousSurveyLimiter } = require("../middlewares/rateLimiter");
+const createSurveyController = require("../controllers/survey/createSurvey.controller");
+const { publishSurvey } = require("../controllers/survey/publishSurvey.controller");
 
 // 🟢 Public routes
 router.get("/public/all", getPublicSurveys);
 router.get("/public/:id", getPublicSurveyById);
-router.post("/public/submit", submitSurveyResponse);
+router.post("/public/submit", surveyResponseLimiter, anonymousSurveyLimiter, submitSurveyResponse);
 
 // 🟡 Protected routes
 router.use(protect);
@@ -60,8 +62,8 @@ const setTenantId = (req, res, next) => {
 router.use(setTenantId);
 
 // 🧠 ADMIN ROUTES (Full Access — no permission checks)
-router.post("/create", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:create"), upload.single("logo"), createSurvey);
-router.post("/save-draft", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:create"), upload.single("logo"), createSurvey);
+router.post("/create", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:create"), upload.single("logo"), publishSurvey); 
+router.post("/save-draft", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:create"), upload.single("logo"), createSurveyController);
 router.get("/", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:read"), getAllSurveys);
 router.get("/:id", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:detail:view"), getSurveyById);
 router.put("/:id", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:settings:update"), upload.single("logo"), updateSurvey);
@@ -78,5 +80,12 @@ router.get("/dashboards/executive", tenantCheck, allowRoles("admin", "companyAdm
 router.get("/dashboards/operational", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("dashboard:view"), getOperationalDashboard);
 
 router.get("/respond/:token", getSurveyByToken);
-router.post("/respond/:token", submitSurveyResponse);
+router.post("/respond/:token", surveyResponseLimiter, submitSurveyResponse); 
+
+// ✅ Direct publish (new survey + publish in one go)
+router.post("/publish", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:publish"), publishSurvey);
+
+// ✅ Publish existing draft
+router.post("/:surveyId/publish", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:publish"), publishSurvey);
+
 module.exports = router;

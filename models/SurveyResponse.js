@@ -37,10 +37,23 @@ const surveyResponseSchema = new mongoose.Schema(
     ip: { type: String }, // for public + anonymous tracking
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // optional
+    status: {
+      type: String,
+      enum: ["partial", "submitted"],
+      default: "submitted"
+    },
+    resumeToken: {
+      type: String,
+      unique: true,
+      sparse: true // allows multiple nulls
+    },
+    lastSavedAt: { type: Date },
+    currentQuestionIndex: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
 
 surveyResponseSchema.index({ tenant: 1, survey: 1 });
+surveyResponseSchema.index({ resumeToken: 1 });
 
 module.exports = mongoose.model("SurveyResponse", surveyResponseSchema);

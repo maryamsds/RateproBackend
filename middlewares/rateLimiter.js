@@ -12,10 +12,32 @@ exports.globalLimiter = rateLimit({
 });
 
 exports.authLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 min
-  max: 10, // max 10 OTP/logins/regs per IP
+  windowMs: 10 * 60 * 1000, 
+  max: 10,
   message: {
     status: 429,
     message: "Too many auth attempts. Please wait and try again.",
+  },
+});
+
+// ⬅️ ADD: Survey response rate limiter
+exports.surveyResponseLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 submissions per minute per IP
+  message: {
+    status: 429,
+    message: "Too many submissions. Please wait before submitting again.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ⬅️ ADD: Anonymous survey abuse prevention
+exports.anonymousSurveyLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  max: 50, // 50 anonymous responses per day per IP
+  message: {
+    status: 429,
+    message: "Daily submission limit reached. Please try again tomorrow.",
   },
 });

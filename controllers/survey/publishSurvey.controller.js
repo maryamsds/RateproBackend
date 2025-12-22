@@ -4,15 +4,40 @@ const Logger = require("../../utils/auditLog");
 
 exports.publishSurvey = async (req, res, next) => {
   try {
-    const { surveyId } = req.params;
-    const tenantId = req.user.tenant;
+    const { surveyId } = req.params; // For draft publish
+    
+    // ✅ FIX: Accept survey data directly from body (not req.body.survey)
+    // Frontend sends complete survey object in body
+    const surveyData = req.body && Object.keys(req.body).length > 0 ? req.body : null;
+    
+    const tenantId = req.user.tenant?._id || req.user.tenant;
     const userId = req.user._id;
 
-    const result = await publishService.publish(surveyId, tenantId, userId);
+    console.log("🚀 [PUBLISH START]", { 
+      surveyId, 
+      hasSurveyData: !!surveyData,
+      bodyKeys: surveyData ? Object.keys(surveyData) : [],
+      tenantId: tenantId?.toString(), 
+      userId: userId?.toString() 
+    });
+
+    // Validate: at least one must be provided
+    if (!surveyId && !surveyData) {
+      return res.status(400).json({ 
+        message: "Either surveyId (in URL) or survey data (in body) is required" 
+      });
+    }
+
+    const result = await publishService.publish({
+      surveyId,
+      surveyData,
+      tenantId,
+      userId
+    });
 
     Logger.info("survey_publish", "Survey published successfully", {
       context: {
-        surveyId,
+        surveyId: result.surveyId,
         invitesCreated: result.invitesCreated,
         userId
       },

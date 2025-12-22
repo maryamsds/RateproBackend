@@ -10,6 +10,7 @@ const cron = require('node-cron');
 const { notFound, errorHandler } = require("./middlewares/errorHandler");
 const retagInactiveContacts = require("./jobs/retagInactiveContacts.job.js");
 const { syncSystemSegments } = require("./crons/systemSegments.cron.js");
+const { autoCloseSurveys } = require("./crons/autoCloseSurveys.cron.js"); 
 const { recomputeAudienceIntelligence } = require("./jobs/audience/recomputeAudienceIntelligence.job");
 
 // MongoDB connection and seeding
@@ -103,6 +104,7 @@ cron.schedule('*/5 * * * *', () => {
 cron.schedule('0 2 * * *', async () => {
   await retagInactiveContacts();
   await syncSystemSegments();
+  await autoCloseSurveys();
   recomputeAudienceIntelligence().catch((err) => {
     console.error('Audience intelligence refresh failed', err);
   });

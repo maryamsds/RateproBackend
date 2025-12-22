@@ -31,10 +31,10 @@ exports.verifyInviteToken = async (req, res, next) => {
     }).lean();
 
     if (!invite) {
-      Logger.warn("verifyInviteToken", "Invite not found", {
+      Logger.warn("verifyInviteToken", "Invalid token", {
         context: { token, ip: requesterIp },
         req
-      });ٖ
+      });
       return res.status(404).json({ message: "Invalid or expired link" });
     }
 
@@ -77,6 +77,14 @@ exports.verifyInviteToken = async (req, res, next) => {
         });
         return res.status(403).json({ message: "Survey is not active" });
       }
+    }
+
+    if (survey.schedule?.endDate && new Date(survey.schedule.endDate) < now) {
+      Logger.info("verifyInviteToken", "Survey has ended", {
+        context: { surveyId: survey._id, endDate: survey.schedule.endDate },
+        req
+      });
+      return res.status(410).json({ message: "This survey has ended and is no longer accepting responses" });
     }
 
     // If invite has an expiry concept (optional), check here (example field: expiresAt)

@@ -251,7 +251,9 @@ exports.createContact = async (req, res) => {
         const { name, email, phone, company, tags, status, contactCategories } = req.body;
 
         // const segmentId = segment ? (typeof segment === "string" ? segment : segment._id) : null;
-        const contactCategoriesIds = contactCategories?.map(id => new mongoose.Types.ObjectId(id));
+        const contactCategoriesIds = Array.isArray(contactCategories)
+            ? contactCategories.map(id => new mongoose.Types.ObjectId(id))
+            : [];
 
         const now = new Date();
         const enrichment = enrichContact({ phone, email, company });
@@ -282,13 +284,12 @@ exports.createContact = async (req, res) => {
 
         console.log("✅ Contact created:", newContact._id);
 
-        const contactWithSegment = await Contact.findOne({
+        const contactWithCategories = await Contact.findOne({
             _id: newContact._id,
-            tenantId: req.tenantId
-        })
-        // .populate("segment", "name size");
-        console.log("🔹 Returning contact with populated segment");
-        res.status(201).json(contactWithSegment);
+            tenantId: req.tenantId,
+        }).populate("contactCategories", "name type active");
+        console.log("🔹 Returning contact with populated categories");
+        res.status(201).json(contactWithCategories);
 
     } catch (err) {
         console.error("❌ Error creating contact:", err);

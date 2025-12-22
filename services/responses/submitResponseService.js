@@ -1,5 +1,5 @@
 // /services/responses/submitResponseService.js
-const SurveyInvite = require("../../models/SurveyInvites");
+const SurveyInvite = require("../../models/SurveyInvite");
 const SurveyResponse = require("../../models/SurveyResponse");
 const { processPostSurveyResponse } = require("../postResponse/postResponseProcessor");
 const { postResponseQueue } = require("../../queues/postResponse.queue");

@@ -119,8 +119,10 @@
 // };
 // controllers/ContactCategoryController.js
 const ContactCategory = require('../models/ContactCategory');
+const Contact = require("../models/ContactManagement");
 const Joi = require('joi');
 const Logger = require("../utils/logger");
+const { default: mongoose } = require('mongoose');
 
 // Joi Validation Schemas
 const createSchema = Joi.object({
@@ -220,38 +222,69 @@ exports.createCategory = async (req, res) => {
 
 // 🔹 READ (All tenant categories)
 exports.getCategories = async (req, res) => {
-    try {
-        const filter = {
-            $or: [
-                { isDefault: true },           // global defaults
-                { tenant: req.tenantId },      // tenant’s own
-            ],
-            active: true,
-        };
+  try {
+    const tenantObjectId = new mongoose.Types.ObjectId(req.tenantId);
 
-        const categories = await ContactCategory.find(filter)
-            .select("name type active isDefault createdAt")
-            .sort({ isDefault: -1, name: 1 }); // show defaults first
+    const categories = await ContactCategory.aggregate([
+      {
+        $match: {
+          active: true,
+          $or: [
+            { isDefault: true },
+            { tenant: tenantObjectId },
+          ],
+        },
+      },
 
-        Logger.info("getCategories", "Fetched categories", {
-            context: {
-                tenantId: req.tenantId,
-                count: categories.length
+      {
+        $lookup: {
+          from: "contacts",
+          let: { categoryId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$tenantId", tenantObjectId] },
+
+                    // 🔥 SAFE $in
+                    {
+                      $in: [
+                        "$$categoryId",
+                        { $ifNull: ["$contactCategories", []] },
+                      ],
+                    },
+                  ],
+                },
+              },
             },
-            req
-        });
+            { $count: "total" },
+          ],
+          as: "contactsMeta",
+        },
+      },
 
-        res.json({ success: true, count: categories.length, data: { categories } });
-    } catch (err) {
-        Logger.error("getCategories", "Server error", {
-            error: err,
-            context: {
-                tenantId: req.tenantId
-            },
-            req
-        });
-        res.status(500).json({ message: 'Server error', error: err.message });
-    }
+      {
+        $addFields: {
+          size: {
+            $ifNull: [{ $arrayElemAt: ["$contactsMeta.total", 0] }, 0],
+          },
+        },
+      },
+
+      { $project: { contactsMeta: 0 } },
+      { $sort: { isDefault: -1, name: 1 } },
+    ]);
+
+    res.json({
+      success: true,
+      count: categories.length,
+      data: { categories },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
 };
 
 // 🔹 UPDATE

@@ -56,7 +56,7 @@ const surveySchema = new mongoose.Schema(
       isPasswordProtected: { type: Boolean, default: false },
       password: { type: String },
     },
-    status: { type: String, enum: ["active", "inactive", "draft", "scheduled"], default: "draft" }, // ← "scheduled" add kiya!
+    status: { type: String, enum: ["active", "inactive", "draft", "scheduled", "published", "closed"], default: "draft" }, // ← "scheduled" add kiya!
 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     totalResponses: { type: Number, default: 0 },
@@ -128,6 +128,12 @@ const surveySchema = new mongoose.Schema(
         url: { type: String },
       },
       redirectUrl: { type: String },
+    },
+
+    version: { type: Number, default: 1 },
+    publishedSnapshot: {
+      questions: [questionSchema],
+      lockedAt: Date
     },
   },
   { timestamps: true }

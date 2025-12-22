@@ -45,18 +45,33 @@ router.post(
  * 🔹 LIST CONTACTS (future)
  * GET /api/contacts
  */
-router.get("/", setTenantId, allowRoles("companyAdmin", "admin"), listContactsController.list);
+router.get(
+  "/",
+  setTenantId,
+  allowRoles("companyAdmin", "admin"),
+  listContactsController.listContacts
+);
 
 /**
  * 🔹 UPDATE CONTACT (future)
  * PUT /api/contacts/:id
  */
-router.put("/:id", setTenantId, allowRoles("companyAdmin", "admin"), updateContactController.update);
+router.put(
+  "/:id",
+  setTenantId,
+  allowRoles("companyAdmin", "admin"),
+  updateContactController.updateContact
+);
 
 /**
  * 🔹 DELETE CONTACT (future)
  * DELETE /api/contacts/:id
  */
-router.delete("/:id", setTenantId, allowRoles("companyAdmin", "admin"), deleteContactController.deleteContact);
+router.delete(
+  "/:id",
+  setTenantId,
+  allowRoles("companyAdmin", "admin"),
+  deleteContactController.deleteContact
+);
 
 module.exports = router;

@@ -116,7 +116,10 @@ const sendEmail = async ({
     getTransporter()
       .sendMail(mailOptions)
       .catch(err => {
-        // 🚨 swallow SMTP errors
+        // 🚨 Log the actual error for debugging
+        console.error('❌ [sendEmail] SMTP Error:', err.message);
+        console.error('❌ [sendEmail] Full error:', err);
+        
         Logger.error('sendEmail', 'Email send failed', {
           error: err,
           context: {
