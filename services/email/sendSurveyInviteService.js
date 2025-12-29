@@ -5,7 +5,7 @@ const sendEmail = require("../../utils/sendEmail");
 const { generateInviteQRCodeService } = require("../survey/inviteQrService");
 const SurveyInvite = require("../../models/SurveyInvite");
 
-const FRONTEND_SURVEY_URL = process.env.FRONTEND_SURVEY_URL;
+const FRONTEND_SURVEY_URL = process.env.PUBLIC_URL_PROD;
 
 const sendSurveyInvites = async ({ survey, invites, tenant }) => { // ✅ Added tenant parameter
     console.log("📧 [sendSurveyInvites] Starting", { surveyId: survey._id, inviteCount: invites.length });

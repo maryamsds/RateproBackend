@@ -59,7 +59,7 @@ exports.submitSurveyResponseService = async ({
       responseId: response._id,
       inviteId: invite._id
     },
-    req
+    ip
   });
 
   return response;

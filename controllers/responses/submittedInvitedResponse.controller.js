@@ -1,5 +1,5 @@
 // controllers/responses/submittedInvitedResponse.controller.js
-const { submitResponseSchema } = require("../../validators/responseValidator");
+const { submitResponseSchema } = require("../../validators/surveyResponseValidator");
 const { handleInvitedResponse } = require("../../services/responses/invitedResponseService");
 
 exports.submitInvitedResponse = async (req, res, next) => {

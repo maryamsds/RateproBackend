@@ -34,10 +34,14 @@ const { surveyResponseLimiter, anonymousSurveyLimiter } = require("../middleware
 const createSurveyController = require("../controllers/survey/createSurvey.controller");
 const { publishSurvey } = require("../controllers/survey/publishSurvey.controller");
 
+const { verifyInviteToken } = require("../controllers/responses/verifyToken.controller");
+const { submitInvitedResponse } = require("../controllers/responses/submittedInvitedResponse.controller");
+const { submitAnonymousResponse } = require("../controllers/responses/submitAnonymousResponse.controller");
+
 // 🟢 Public routes
 router.get("/public/all", getPublicSurveys);
 router.get("/public/:id", getPublicSurveyById);
-router.post("/public/submit", surveyResponseLimiter, anonymousSurveyLimiter, submitSurveyResponse);
+// router.post("/public/submit", surveyResponseLimiter, anonymousSurveyLimiter, submitSurveyResponse);
 
 // 🟡 Protected routes
 router.use(protect);
@@ -62,7 +66,7 @@ const setTenantId = (req, res, next) => {
 router.use(setTenantId);
 
 // 🧠 ADMIN ROUTES (Full Access — no permission checks)
-router.post("/create", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:create"), upload.single("logo"), publishSurvey); 
+router.post("/create", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:create"), upload.single("logo"), publishSurvey);
 router.post("/save-draft", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:create"), upload.single("logo"), createSurveyController);
 router.get("/", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:read"), getAllSurveys);
 router.get("/:id", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:detail:view"), getSurveyById);
@@ -79,8 +83,18 @@ router.post("/feedback/follow-up", tenantCheck, allowRoles("admin", "companyAdmi
 router.get("/dashboards/executive", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("dashboard:view"), getExecutiveDashboard);
 router.get("/dashboards/operational", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("dashboard:view"), getOperationalDashboard);
 
-router.get("/respond/:token", getSurveyByToken);
-router.post("/respond/:token", surveyResponseLimiter, submitSurveyResponse); 
+
+// ✅ RESPONSE ROUTES (Client-demanded flow)
+
+// Invited survey: verify & submit
+router.get("/responses/invited/:token", verifyInviteToken); // GET survey + verify token
+router.post("/responses/invited/:token", surveyResponseLimiter, submitInvitedResponse); // POST invited response
+
+// Anonymous survey: submit only
+router.post("/responses/anonymous/:surveyId", surveyResponseLimiter, anonymousSurveyLimiter, submitAnonymousResponse);
+
+// router.get("/respond/:token", getSurveyByToken);
+// router.post("/respond/:token", surveyResponseLimiter, submitSurveyResponse); 
 
 // ✅ Direct publish (new survey + publish in one go)
 router.post("/publish", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("survey:publish"), publishSurvey);

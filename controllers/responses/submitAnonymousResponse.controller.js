@@ -1,5 +1,5 @@
 // controllers/responses/submitAnonymousResponse.controller.js
-const { submitResponseSchema } = require("../../validators/responseValidator");
+const { submitResponseSchema } = require("../../validators/surveyResponseValidator");
 const { handleAnonymousResponse } = require("../../services/responses/anonymousResponseService");
 
 exports.submitAnonymousResponse = async (req, res, next) => {

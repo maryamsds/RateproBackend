@@ -1,5 +1,5 @@
 const { submitResponseSchema } = require("../../validators/surveyResponseValidator");
-const { submitSurveyResponseService } = require("../../services/surveyResponses/submitResponseService");
+const { submitSurveyResponseService } = require("../../services/responses/submitResponseService");
 
 exports.submitSurveyResponse = async (req, res, next) => {
   try {
