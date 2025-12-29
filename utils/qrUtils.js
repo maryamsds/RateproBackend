@@ -1,43 +1,105 @@
+// // utils/qrUtils.js
+// const QRCode = require("qrcode");
+// const { createCanvas, loadImage } = require("canvas");
+
+// /**
+//  * Generate QR Code (Node.js compatible)
+//  * @param {string} url
+//  * @param {object} options
+//  */
+// exports.generateQRCode = async (
+//   url,
+//   options = {}
+// ) => {
+//   const {
+//     size = 300,
+//     backgroundColor = "#ffffff",
+//     foregroundColor = "#000000",
+//     logoPath = null,
+//     errorCorrectionLevel = "H",
+//   } = options;
+
+//   // 🔹 SIMPLE QR (no logo)
+//   if (!logoPath) {
+//     return QRCode.toDataURL(url, {
+//       errorCorrectionLevel,
+//       width: size,
+//       margin: 2,
+//       color: {
+//         dark: foregroundColor,
+//         light: backgroundColor,
+//       },
+//     });
+//   }
+
+//   // 🔹 QR with logo using canvas (Node.js compatible)
+//   try {
+//     const canvas = createCanvas(size, size);
+//     const ctx = canvas.getContext("2d");
+
+//     // Generate QR code on canvas
+//     await QRCode.toCanvas(canvas, url, {
+//       errorCorrectionLevel,
+//       width: size,
+//       margin: 2,
+//       color: {
+//         dark: foregroundColor,
+//         light: backgroundColor,
+//       },
+//     });
+
+//     // Add logo in center
+//     const logo = await loadImage(logoPath);
+//     const logoSize = size * 0.25; // 25% of QR size
+//     const logoX = (size - logoSize) / 2;
+//     const logoY = (size - logoSize) / 2;
+
+//     // Draw white background for logo
+//     ctx.fillStyle = backgroundColor;
+//     ctx.fillRect(logoX - 5, logoY - 5, logoSize + 10, logoSize + 10);
+
+//     // Draw logo
+//     ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+
+//     return canvas.toDataURL("image/png");
+//   } catch (err) {
+//     console.error("⚠️ [generateQRCode] Logo QR failed, falling back to simple QR:", err.message);
+//     // Fallback to simple QR
+//     return QRCode.toDataURL(url, {
+//       errorCorrectionLevel,
+//       width: size,
+//       margin: 2,
+//       color: {
+//         dark: foregroundColor,
+//         light: backgroundColor,
+//       },
+//     });
+//   }
+// };
 // utils/qrUtils.js
 const QRCode = require("qrcode");
 const { createCanvas, loadImage } = require("canvas");
+const path = require("path");
 
-/**
- * Generate QR Code (Node.js compatible)
- * @param {string} url
- * @param {object} options
- */
-exports.generateQRCode = async (
-  url,
-  options = {}
-) => {
+const QR_LOGO_PATH = path.join(
+  process.cwd(),
+  "assets",
+  "qr_logo.png"
+);
+
+exports.generateQRCode = async (url, options = {}) => {
   const {
     size = 300,
-    backgroundColor = "#ffffff",
-    foregroundColor = "#000000",
-    logoPath = null,
+    backgroundColor = "#0d6efd", // match frontend var(--primary-color)
+    foregroundColor = "#212529",
     errorCorrectionLevel = "H",
+    includeLogo = true,
   } = options;
 
-  // 🔹 SIMPLE QR (no logo)
-  if (!logoPath) {
-    return QRCode.toDataURL(url, {
-      errorCorrectionLevel,
-      width: size,
-      margin: 2,
-      color: {
-        dark: foregroundColor,
-        light: backgroundColor,
-      },
-    });
-  }
-
-  // 🔹 QR with logo using canvas (Node.js compatible)
   try {
     const canvas = createCanvas(size, size);
     const ctx = canvas.getContext("2d");
 
-    // Generate QR code on canvas
     await QRCode.toCanvas(canvas, url, {
       errorCorrectionLevel,
       width: size,
@@ -48,31 +110,27 @@ exports.generateQRCode = async (
       },
     });
 
-    // Add logo in center
-    const logo = await loadImage(logoPath);
-    const logoSize = size * 0.25; // 25% of QR size
-    const logoX = (size - logoSize) / 2;
-    const logoY = (size - logoSize) / 2;
+    if (includeLogo) {
+      const logo = await loadImage(QR_LOGO_PATH);
+      const logoSize = size * 0.25;
+      const logoX = (size - logoSize) / 2;
+      const logoY = (size - logoSize) / 2;
 
-    // Draw white background for logo
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(logoX - 5, logoY - 5, logoSize + 10, logoSize + 10);
+      ctx.fillStyle = backgroundColor;
+      ctx.fillRect(logoX - 6, logoY - 6, logoSize + 12, logoSize + 12);
 
-    // Draw logo
-    ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+      ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+    }
 
     return canvas.toDataURL("image/png");
+
   } catch (err) {
-    console.error("⚠️ [generateQRCode] Logo QR failed, falling back to simple QR:", err.message);
-    // Fallback to simple QR
+    console.error("⚠️ [generateQRCode] fallback:", err.message);
+
     return QRCode.toDataURL(url, {
       errorCorrectionLevel,
       width: size,
       margin: 2,
-      color: {
-        dark: foregroundColor,
-        light: backgroundColor,
-      },
     });
   }
 };
