@@ -11,7 +11,7 @@ exports.generateInviteQRCodeService = async ({ inviteId }) => {
 
   if (!invite) return null;
 
-  const url = `${process.env.FRONTEND_URL}/survey/respond?token=${invite.token}`;
+  const url = `https://rate-pro-public.vercel.app/survey/respond?token=${invite.token}`;
   console.log("🔲 [generateInviteQRCode] Generated URL:", url);
   const qr = await generateQRCode(url, {
     size: 256,
