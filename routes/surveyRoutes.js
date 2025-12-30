@@ -43,6 +43,15 @@ router.get("/public/all", getPublicSurveys);
 router.get("/public/:id", getPublicSurveyById);
 // router.post("/public/submit", surveyResponseLimiter, anonymousSurveyLimiter, submitSurveyResponse);
 
+// ✅ RESPONSE ROUTES (Client-demanded flow)
+
+// Invited survey: verify & submit
+router.get("/responses/invited/:token", verifyInviteToken); // GET survey + verify token
+router.post("/responses/invited/:token", surveyResponseLimiter, submitInvitedResponse); // POST invited response
+
+// Anonymous survey: submit only
+router.post("/responses/anonymous/:surveyId", surveyResponseLimiter, anonymousSurveyLimiter, submitAnonymousResponse);
+
 // 🟡 Protected routes
 router.use(protect);
 
@@ -82,16 +91,6 @@ router.post("/actions/generate", tenantCheck, allowRoles("admin", "companyAdmin"
 router.post("/feedback/follow-up", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("feedback:follow-up"), followUp);
 router.get("/dashboards/executive", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("dashboard:view"), getExecutiveDashboard);
 router.get("/dashboards/operational", tenantCheck, allowRoles("admin", "companyAdmin"), allowPermission("dashboard:view"), getOperationalDashboard);
-
-
-// ✅ RESPONSE ROUTES (Client-demanded flow)
-
-// Invited survey: verify & submit
-router.get("/responses/invited/:token", verifyInviteToken); // GET survey + verify token
-router.post("/responses/invited/:token", surveyResponseLimiter, submitInvitedResponse); // POST invited response
-
-// Anonymous survey: submit only
-router.post("/responses/anonymous/:surveyId", surveyResponseLimiter, anonymousSurveyLimiter, submitAnonymousResponse);
 
 // router.get("/respond/:token", getSurveyByToken);
 // router.post("/respond/:token", surveyResponseLimiter, submitSurveyResponse); 
